@@ -17,15 +17,18 @@ const { setupStatusHandlers } = require('./handlers/status');
 
 const logger = pino({ level: 'silent' });
 
-// Version de secours si fetchLatestBaileysVersion échoue
+// ── Garde les sockets en vie pendant le pairing (empêche le GC) ───
+const pendingSockets = new Map();
+
 const FALLBACK_VERSION = [2, 3000, 1023596128];
 
 async function getVersion() {
   try {
     const { version } = await fetchLatestBaileysVersion();
+    console.log('[BOT] Version WhatsApp:', version.join('.'));
     return version;
   } catch (e) {
-    console.log('[BOT] fetchLatestBaileysVersion a échoué, utilisation de la version de secours');
+    console.log('[BOT] fetchLatestBaileysVersion échoué → version fallback');
     return FALLBACK_VERSION;
   }
 }
@@ -39,6 +42,16 @@ function getBrowserValue() {
 async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
+
+  // Nettoyer les éventuels fichiers corrompus d'une tentative précédente
+  if (fs.existsSync(sessionPath)) {
+    const files = fs.readdirSync(sessionPath);
+    // S'il y a des fichiers mais pas de creds.json → session corrompue, supprimer
+    if (files.length > 0 && !files.includes('creds.json')) {
+      console.log(`[${sanitized}] Session corrompue détectée, nettoyage...`);
+      fs.removeSync(sessionPath);
+    }
+  }
   fs.ensureDirSync(sessionPath);
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
@@ -55,77 +68,93 @@ async function startSession(number) {
     browser: getBrowserValue(),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
-    keepAliveIntervalMs: 25000,
+    keepAliveIntervalMs: 10000,
     retryRequestDelayMs: 2000,
     generateHighQualityLinkPreview: true,
     markOnlineOnConnect: true,
     syncFullHistory: false,
   });
 
-  // ── Sauvegarder les credentials ──────────────────────────────────────────
+  // Garder le socket en vie pendant toute la phase de pairing
+  pendingSockets.set(sanitized, sock);
+
+  // ── Sauvegarder les credentials ────────────────────────────────
   sock.ev.on('creds.update', saveCreds);
 
-  // ── Gestionnaire de COMMANDES (messages entrants) ─────────────────────────
+  // ── Messages entrants ──────────────────────────────────────────
   sock.ev.on('messages.upsert', async (m) => {
-    try {
-      await messageHandler(sock, m);
-    } catch (e) {
-      console.error(`[${sanitized}] Erreur messageHandler:`, e.message);
-    }
+    try { await messageHandler(sock, m); }
+    catch (e) { console.error(`[${sanitized}] Erreur messageHandler:`, e.message); }
   });
 
-  // ── Gestionnaire de STATUTS (auto-view, auto-like) ────────────────────────
+  // ── Statuts ────────────────────────────────────────────────────
   setupStatusHandlers(sock);
 
-  // ── Gestion de la connexion ───────────────────────────────────────────────
+  // ── Connexion ──────────────────────────────────────────────────
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update;
+
+    if (connection === 'open') {
+      console.log(`[${sanitized}] ✅ Connecté !`);
+      pendingSockets.delete(sanitized); // Libérer le socket du map pending
+      store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
+      return;
+    }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const reason     = lastDisconnect?.error?.output?.payload?.error || statusCode;
-      console.log(`[${sanitized}] Connexion fermée. Raison: ${reason}`);
+      console.log(`[${sanitized}] Connexion fermée. Raison: ${reason} (code: ${statusCode})`);
+
+      pendingSockets.delete(sanitized);
 
       if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
         console.log(`[${sanitized}] Session supprimée (logout)`);
       } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
-        console.log(`[${sanitized}] Restart requis (pairing OK), reconnexion immédiate...`);
-        setTimeout(() => reconnectSession(sanitized), 1500);
+        console.log(`[${sanitized}] Restart requis, reconnexion dans 2s...`);
+        setTimeout(() => reconnectSession(sanitized), 2000);
+      } else if (statusCode === 408 || statusCode === 503) {
+        console.log(`[${sanitized}] Timeout/Service indisponible, reconnexion dans 10s...`);
+        setTimeout(() => reconnectSession(sanitized), 10000);
       } else {
         console.log(`[${sanitized}] Reconnexion dans 5s...`);
         setTimeout(() => reconnectSession(sanitized), 5000);
       }
-      return;
-    }
-
-    if (connection === 'open') {
-      console.log(`[${sanitized}] ✅ Connecté ! Tape .menu pour voir les commandes.`);
-      store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
     }
   });
 
-  // ── Demander le code de jumelage si pas encore couplé ────────────────────
+  // ── Code de jumelage ────────────────────────────────────────────
   if (!sock.authState.creds.registered) {
-    // Attendre que la connexion WebSocket soit prête (3s plus fiable que 1.5s)
+    // Attendre que le WebSocket WhatsApp soit initialisé
     await delay(3000);
     try {
-      console.log(`[${sanitized}] Demande du code de jumelage...`);
+      console.log(`[${sanitized}] Demande du code de jumelage (version ${version.join('.')})...`);
       const code          = await sock.requestPairingCode(sanitized);
       const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
-      console.log(`[${sanitized}] Code de jumelage: ${formattedCode}`);
+      console.log(`[${sanitized}] ✅ Code: ${formattedCode}`);
+
+      // Le sock reste dans pendingSockets jusqu'à connection === 'open'
+      // Timeout de sécurité : nettoyer après 5 minutes si jamais connecté
+      setTimeout(() => {
+        if (pendingSockets.has(sanitized)) {
+          console.log(`[${sanitized}] Timeout pairing (5min), nettoyage socket pending`);
+          pendingSockets.delete(sanitized);
+        }
+      }, 5 * 60 * 1000);
+
       return { sock, code: formattedCode };
     } catch (err) {
-      // Logguer l'erreur réelle pour debug
       const realError = err?.message || String(err);
       console.error(`[${sanitized}] Erreur requestPairingCode:`, realError);
-      // Fermer proprement le socket avant de relancer
+      pendingSockets.delete(sanitized);
       try { sock.end(); } catch (_) {}
       throw new Error(`Échec du code de jumelage: ${realError}`);
     }
   }
 
+  pendingSockets.delete(sanitized);
   store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
   return { sock, code: null };
 }
@@ -133,6 +162,8 @@ async function startSession(number) {
 async function reconnectSession(sanitized) {
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
   if (!fs.existsSync(sessionPath)) return;
+  // Ne pas reconnecter si une session est déjà active
+  if (store.getSession(sanitized)) return;
   try {
     await startSession(sanitized);
   } catch (e) {
