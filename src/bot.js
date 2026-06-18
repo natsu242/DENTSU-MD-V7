@@ -11,71 +11,10 @@ const fs = require('fs-extra');
 const path = require('path');
 const config = require('./config');
 const store = require('./lib/store');
-const { messageHandler, sendMainMenu } = require('./handlers/message');
+const { messageHandler } = require('./handlers/message');
 const { setupStatusHandlers } = require('./handlers/status');
-const { getDate, getTime, getRam, getHost, countCommands } = require('./lib/utils');
 
 const logger = pino({ level: 'silent' });
-
-// ── Envoie le menu de bienvenue au numéro couplé ──────────────────────────
-async function sendWelcomeMenu(sock, sanitized) {
-  let totalCmds = 0;
-  try { totalCmds = await countCommands(); } catch (_) {}
-
-  const prefixStr = (config.PREFIXES || ['.']).join('  ');
-
-  const menuText =
-`╔══════════════════════╗
-║   🤖 *DENTSU MD V7*  ║
-╚══════════════════════╝
-
-✅ Bot connecté avec succès !
-
-┌─────────────────────────
-│ 📌 *Version* : V7
-│ 👨‍💻 *Dev* : Natsu Tech
-│ 📱 *Numéro* : +${sanitized}
-│ 📅 *Date* : ${getDate()}
-│ ⏰ *Heure* : ${getTime()}
-│ 📊 *Commandes* : ${totalCmds}+
-│ 🌐 *Mode* : ${config.MODE.toUpperCase()}
-│ ⌨️ *Préfixes* : ${prefixStr}
-│ 🖥️ *RAM* : ${getRam()}
-│ 🌍 *Host* : ${getHost()}
-└─────────────────────────
-
-*📋 CATÉGORIES DE COMMANDES*
-
-🧠 *AI MENU*      → .aimenu
-👥 *GROUP MENU*   → .groupmenu
-👑 *OWNER MENU*   → .ownermenu
-🎉 *FUN MENU*     → .funmenu
-🎮 *GAME MENU*    → .gamemenu
-🎵 *SOUND MENU*   → .soundmenu
-🔧 *OTHER MENU*   → .othermenu
-📥 *DOWNLOADER*   → .dlmenu
-📸 *MEDIA MENU*   → .mediamenu
-🔍 *SEARCH MENU*  → .searchmenu
-🖼️ *RANDOM IMAGE* → .randommenu
-🎌 *ANIME MENU*   → .animemenu
-
-━━━━━━━━━━━━━━━━━━━━━
-💡 Tape *.menu* ou juste *menu* pour revoir ce menu
-${config.BOT_FOOTER}`;
-
-  try {
-    await sock.sendMessage(sanitized + '@s.whatsapp.net', {
-      image: { url: config.MENU_IMAGE },
-      caption: menuText,
-    });
-  } catch (_) {
-    try {
-      await sock.sendMessage(sanitized + '@s.whatsapp.net', { text: menuText });
-    } catch (e2) {
-      console.log(`[${sanitized}] Impossible d'envoyer le menu de bienvenue: ${e2.message}`);
-    }
-  }
-}
 
 async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
@@ -105,7 +44,6 @@ async function startSession(number) {
   sock.ev.on('creds.update', saveCreds);
 
   // ── Gestionnaire de COMMANDES (messages entrants) ─────────────────────────
-  // Enregistré UNE SEULE FOIS ici, avant tout le reste
   sock.ev.on('messages.upsert', async (m) => {
     try {
       await messageHandler(sock, m);
@@ -115,7 +53,6 @@ async function startSession(number) {
   });
 
   // ── Gestionnaire de STATUTS (auto-view, auto-like) ────────────────────────
-  // Enregistré UNE SEULE FOIS ici, avant tout le reste
   setupStatusHandlers(sock);
 
   // ── Gestion de la connexion ───────────────────────────────────────────────
@@ -139,16 +76,8 @@ async function startSession(number) {
     }
 
     if (connection === 'open') {
-      console.log(`[${sanitized}] ✅ Connecté !`);
+      console.log(`[${sanitized}] ✅ Connecté ! Tape .menu pour voir les commandes.`);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
-
-      // Envoyer le menu (pas juste un message de bienvenue)
-      try {
-        await delay(2000);
-        await sendWelcomeMenu(sock, sanitized);
-      } catch (e) {
-        console.log(`[${sanitized}] Erreur menu bienvenue: ${e.message}`);
-      }
     }
   });
 
@@ -166,9 +95,7 @@ async function startSession(number) {
     }
   }
 
-  // Session déjà enregistrée → juste mettre à jour le store
   store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
-
   return { sock, code: null };
 }
 
