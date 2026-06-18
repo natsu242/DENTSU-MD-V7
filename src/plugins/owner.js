@@ -1,6 +1,6 @@
 const config = require('../config');
 const fs = require('fs-extra');
-const { delay } = require('@whiskeysockets/baileys');
+const { delay } = require('baileys');
 const store = require('../lib/store');
 
 const OWNER_MENU = `
