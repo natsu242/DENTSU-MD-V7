@@ -54,7 +54,7 @@ function isOwner(jid) {
 
 async function countCommands() {
   try {
-    const pluginsDir = './src/plugins';
+    const pluginsDir = require('path').join(__dirname, '../plugins');
     const files = fs.readdirSync(pluginsDir);
     let count = 0;
     for (const file of files) {
