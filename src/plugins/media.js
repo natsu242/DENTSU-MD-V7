@@ -1,6 +1,6 @@
 const config = require('../config');
 const axios = require('axios');
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
+const { downloadMediaMessage } = require('baileys');
 const fs = require('fs-extra');
 const path = require('path');
 
@@ -31,7 +31,7 @@ async function handle(ctx) {
     return true;
   }
 
-  const { getContentType } = require('@whiskeysockets/baileys');
+  const { getContentType } = require('baileys');
   const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
   switch(command) {
