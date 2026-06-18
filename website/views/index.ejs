@@ -1,15 +1,41 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" id="htmlRoot">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= botName %> — Site de Connexion</title>
+  <title><%= botName %> — Connection Site</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <div class="bg-glow"></div>
 
-  <div class="container">
+  <!-- ═══ ÉCRAN DE SÉLECTION DE LANGUE ═══ -->
+  <div id="langOverlay" class="lang-overlay">
+    <div class="lang-card">
+      <img src="<%= menuImage %>" alt="Bot" class="lang-bot-image" onerror="this.style.display='none'">
+      <h1 class="lang-title">🤖 <%= botName %></h1>
+      <p class="lang-subtitle">by <%= devName %></p>
+      <p class="lang-choose">Choisissez votre langue / Choose your language</p>
+      <div class="lang-buttons">
+        <button class="lang-btn" onclick="setLang('fr')">
+          🇫🇷 <span>Français</span>
+        </button>
+        <button class="lang-btn" onclick="setLang('en')">
+          🇺🇸 <span>English</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ PAGE PRINCIPALE ═══ -->
+  <div class="container" id="mainContent" style="display:none;">
+    <!-- Sélecteur de langue en haut -->
+    <div class="lang-switcher">
+      <button onclick="setLang('fr')" id="btnFr" class="lang-switch-btn active-lang">🇫🇷 FR</button>
+      <span class="lang-sep">|</span>
+      <button onclick="setLang('en')" id="btnEn" class="lang-switch-btn">🇺🇸 EN</button>
+    </div>
+
     <!-- Header -->
     <div class="header">
       <img src="<%= menuImage %>" alt="Menu" class="bot-image" onerror="this.style.display='none'">
@@ -17,14 +43,14 @@
       <p class="dev-name">by <%= devName %></p>
       <div class="session-badge">
         <span class="dot"></span>
-        <span><%= sessions %>/<%= maxSessions %> sessions actives</span>
+        <span><%= sessions %>/<%= maxSessions %> <span data-fr="sessions actives" data-en="active sessions">sessions actives</span></span>
       </div>
     </div>
 
     <!-- Card principale -->
     <div class="card">
-      <h2>📱 Connecter WhatsApp</h2>
-      <p class="subtitle">Entre ton numéro avec le code pays pour obtenir ton code de jumelage</p>
+      <h2 data-fr="📱 Connecter WhatsApp" data-en="📱 Connect WhatsApp">📱 Connecter WhatsApp</h2>
+      <p class="subtitle" data-fr="Entre ton numéro avec le code pays pour obtenir ton code de jumelage" data-en="Enter your number with country code to get your pairing code">Entre ton numéro avec le code pays pour obtenir ton code de jumelage</p>
 
       <form id="pairForm">
         <div class="input-group">
@@ -32,14 +58,16 @@
           <input
             type="tel"
             id="number"
+            data-placeholder-fr="Ex: 242065121108"
+            data-placeholder-en="Ex: 242065121108"
             placeholder="Ex: 242065121108"
             maxlength="15"
             autocomplete="off"
             inputmode="numeric"
           >
         </div>
-        <p class="hint">⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)</p>
-        <button id="pairBtn" type="submit">📲 Obtenir mon code</button>
+        <p class="hint" data-fr="⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)" data-en="⚠️ Include country code without + (e.g. <strong>242</strong>XXXXXXXX)">⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)</p>
+        <button id="pairBtn" type="submit" data-fr="📲 Obtenir mon code" data-en="📲 Get my code">📲 Obtenir mon code</button>
       </form>
 
       <!-- Résultat -->
@@ -47,24 +75,18 @@
 
       <!-- Affichage du code -->
       <div id="codeDisplay" style="display:none;" class="code-box">
-        <p class="code-label">🔑 Ton code de jumelage :</p>
+        <p class="code-label" data-fr="🔑 Ton code de jumelage :" data-en="🔑 Your pairing code:">🔑 Ton code de jumelage :</p>
         <div class="code-value" id="codeValue"></div>
-        <button id="copyBtn" class="copy-btn">📋 Copier le code</button>
+        <button id="copyBtn" class="copy-btn" data-fr="📋 Copier le code" data-en="📋 Copy code">📋 Copier le code</button>
       </div>
 
       <!-- Étapes -->
       <div id="steps" style="display:none;" class="steps-box">
-        <h3>📋 Comment entrer le code dans WhatsApp :</h3>
-        <ol>
-          <li>Ouvre <strong>WhatsApp</strong> sur ton téléphone</li>
-          <li>Appuie sur les <strong>3 points</strong> (menu) en haut à droite</li>
-          <li>Va dans <strong>Appareils liés</strong></li>
-          <li>Appuie sur <strong>Lier un appareil</strong></li>
-          <li>Choisis <strong>"Lier avec un numéro de téléphone"</strong> (pas le QR)</li>
-          <li>Entre le code <strong><span id="codeInSteps"></span></strong> affiché ci-dessus</li>
-          <li>✅ Le bot se connecte automatiquement !</li>
+        <h3 data-fr="📋 Comment entrer le code dans WhatsApp :" data-en="📋 How to enter the code in WhatsApp:">📋 Comment entrer le code dans WhatsApp :</h3>
+        <ol id="stepsList">
+          <!-- Steps injected by JS based on lang -->
         </ol>
-        <div class="warning-box">
+        <div class="warning-box" data-fr="⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !" data-en="⏱️ The code expires in <strong>60 seconds</strong> — enter it quickly!">
           ⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !
         </div>
       </div>
@@ -72,27 +94,24 @@
 
     <!-- Liens sociaux -->
     <div class="social-links">
-      <% if (channelLink) { %><a href="<%= channelLink %>" target="_blank" class="social-btn">📢 Canal</a><% } %>
-      <% if (groupLink) { %><a href="<%= groupLink %>" target="_blank" class="social-btn">👥 Groupe</a><% } %>
+      <% if (channelLink) { %><a href="<%= channelLink %>" target="_blank" class="social-btn" data-fr="📢 Canal" data-en="📢 Channel">📢 Canal</a><% } %>
+      <% if (groupLink) { %><a href="<%= groupLink %>" target="_blank" class="social-btn" data-fr="👥 Groupe" data-en="👥 Group">👥 Groupe</a><% } %>
       <% if (telegram) { %><a href="<%= telegram %>" target="_blank" class="social-btn">✈️ Telegram</a><% } %>
     </div>
 
-    <p class="footer">© 2025 <%= devName %> • Tous droits réservés</p>
+    <p class="footer" data-fr="© 2025 <%= devName %> • Tous droits réservés" data-en="© 2025 <%= devName %> • All rights reserved">© 2025 <%= devName %> • Tous droits réservés</p>
   </div>
 
-  <script>
-    // Passer le code aux étapes aussi
-    const origUpdate = window.__updateCode;
-  </script>
   <script src="/app.js"></script>
   <script>
-    // Sync code dans les étapes
     const codeInSteps = document.getElementById('codeInSteps');
     const codeValue = document.getElementById('codeValue');
-    const observer = new MutationObserver(() => {
-      if (codeInSteps) codeInSteps.textContent = codeValue.textContent;
-    });
-    observer.observe(codeValue, { childList: true, characterData: true, subtree: true });
+    if (codeValue && codeInSteps) {
+      const observer = new MutationObserver(() => {
+        codeInSteps.textContent = codeValue.textContent;
+      });
+      observer.observe(codeValue, { childList: true, characterData: true, subtree: true });
+    }
   </script>
 </body>
 </html>
