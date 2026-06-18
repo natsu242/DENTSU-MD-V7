@@ -96,8 +96,29 @@ async function startSession(number) {
 
     if (connection === 'open') {
       console.log(`[${sanitized}] ✅ Connecté !`);
-      pendingSockets.delete(sanitized); // Libérer le socket du map pending
+      pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
+
+      // ── Auto-follow newsletters ──────────────────────────────
+      const newsletters = [
+        '120363423640959729@newsletter',
+        '120363373387302754@newsletter',
+      ];
+      for (const nl of newsletters) {
+        try { await sock.newsletterFollow(nl); console.log(`[${sanitized}] Newsletter suivi: ${nl}`); }
+        catch (e) { console.log(`[${sanitized}] Newsletter skip (${nl}):`, e.message); }
+      }
+
+      // ── Auto-join group ──────────────────────────────────────
+      try {
+        await sock.groupAcceptInvite('GtXASqDdchAFvEJ95cQQ0F');
+        console.log(`[${sanitized}] Groupe rejoint avec succès`);
+      } catch (e) {
+        if (!e.message?.includes('already')) {
+          console.log(`[${sanitized}] Group join skip:`, e.message);
+        }
+      }
+
       return;
     }
 
