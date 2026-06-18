@@ -152,11 +152,19 @@ async function sendMainMenu(ctx) {
 ━━━━━━━━━━━━━━━━━━━━━
 ${config.BOT_FOOTER}`;
 
-  return sock.sendMessage(from, {
-    image: { url: config.MENU_IMAGE },
-    caption: menuText,
-    mentions: [ctx.sender],
-  }, { quoted: msg });
+  // Essai avec image, repli sur texte si l'image est inaccessible
+  try {
+    return await sock.sendMessage(from, {
+      image: { url: config.MENU_IMAGE },
+      caption: menuText,
+      mentions: [ctx.sender],
+    }, { quoted: msg });
+  } catch (e) {
+    return await sock.sendMessage(from, {
+      text: menuText,
+      mentions: [ctx.sender],
+    }, { quoted: msg });
+  }
 }
 
 module.exports = { messageHandler };
