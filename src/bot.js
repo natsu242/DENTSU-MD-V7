@@ -40,8 +40,13 @@ async function startSession(number) {
     markOnlineOnConnect: true,
   });
 
-  // ── TOUJOURS configurer les listeners EN PREMIER ──────────────────
+  // ── Configurer TOUS les listeners EN PREMIER (avant le pairing code) ──
   sock.ev.on('creds.update', saveCreds);
+
+  // ── Gestionnaire de messages — toujours actif, même après un nouveau couplage ──
+  sock.ev.on('messages.upsert', async (m) => {
+    try { await messageHandler(sock, m); } catch(e) {}
+  });
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update;
@@ -52,12 +57,10 @@ async function startSession(number) {
       console.log(`[${sanitized}] Connexion fermée. Raison: ${reason}`);
 
       if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
-        // Supprimer la session corrompue
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
         console.log(`[${sanitized}] Session supprimée (logout)`);
       } else {
-        // Toute autre erreur → reconnexion
         console.log(`[${sanitized}] Reconnexion dans 8s...`);
         setTimeout(() => reconnectSession(sanitized), 8000);
       }
@@ -86,7 +89,6 @@ async function startSession(number) {
     await delay(1500);
     try {
       const code = await sock.requestPairingCode(sanitized);
-      // Formater le code en XXXX-XXXX pour l'affichage
       const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
       console.log(`[${sanitized}] Code de jumelage: ${formattedCode}`);
       return { sock, code: formattedCode };
@@ -96,12 +98,9 @@ async function startSession(number) {
     }
   }
 
-  // Déjà connecté – remettre les handlers
-  sock.ev.on('messages.upsert', async (m) => {
-    try { await messageHandler(sock, m); } catch(e) {}
-  });
-  await setupStatusHandlers(sock).catch(() => {});
+  // Déjà connecté — mettre à jour le store
   store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
+  await setupStatusHandlers(sock).catch(() => {});
 
   return { sock, code: null };
 }
