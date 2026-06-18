@@ -106,357 +106,322 @@ async function messageHandler(sock, { messages, type }) {
 async function sendMainMenu(ctx) {
   const { sock, from, msg, senderNumber, sender } = ctx;
 
-  const P = config.PREFIX;
-
   const caption =
-`╔══════════════════╗
-║  ${config.BOT_NAME || 'DENTSU MD V7'}
-╚══════════════════╝
+`╔╦══════════════════════╦╗
+║║   ${config.BOT_NAME || 'DENTSU MD V7'}   ║║
+╚╩══════════════════════╩╝
 
-╔════❰ 🤖 ʙᴏᴛ ɪɴғᴏ ❱════╗
-║ 👑 ᴏᴡɴᴇʀ: ${config.OWNER_NUMBER || 'DENTSU-MD'}
-║ ⏱️ ʀᴜɴᴛɪᴍᴇ: ${getUptime()}
-║ 📦 ᴘʀᴇғɪx: ${P}
-║ ⚙️ ᴍᴏᴅᴇ: ${config.MODE}
-║ 🏷️ ᴠᴇʀsɪᴏɴ: 7.0.0 Bᴇᴛᴀ
-╚══════════════════╝
+╔════[ 🤖 ʙᴏᴛ ɪɴғᴏ ]════╗
+║ 👑 ᴏᴡɴᴇʀ : ${config.OWNER_NUMBER || 'DENTSU-MD'}
+║ ⏱️ ʀᴜɴᴛɪᴍᴇ : ${getUptime()}
+║ 📦 ᴘʀᴇғɪx : ${config.PREFIX}
+║ ⚙️ ᴍᴏᴅᴇ : ${config.MODE}
+║ 🏷️ ᴠᴇʀsɪᴏɴ : 7.0.0 Bᴇᴛᴀ
+╚══════════════════════╝
 
-╔══❰ 🧠 ᴀɪ ❱══╗
-║
-║ ─ ai
-║ ─ gpt
-║ ─ gemini
-║ ─ deepseek
-║ ─ grok-ai
-║ ─ codeai
-║ ─ storyai
-║ ─ triviaai
-║ ─ photoai
-║
-╚══════════════════╝
-╔══❰ 👥 ɢʀᴏᴜᴘᴇ ❱══╗
-║
-║ ─ tagall
-║ ─ hidetag
-║ ─ promote
-║ ─ demote
-║ ─ kick
-║ ─ add
-║ ─ mute
-║ ─ unmute
-║ ─ grouplink
-║ ─ resetlink
-║ ─ kickall
-║ ─ listadmins
-║ ─ groupinfo
-║ ─ subject
-║ ─ desc
-║ ─ left
-║ ─ join
-║ ─ poll
-║ ─ warn
-║ ─ lock
-║ ─ unlock
-║ ─ creategroup
-║
-╚══════════════════╝
-╔══❰ 👑 ᴏᴡɴᴇʀ ❱══╗
-║
-║ ─ ping
-║ ─ alive
-║ ─ mode
-║ ─ block
-║ ─ unblock
-║ ─ broadcast
-║ ─ addsudo
-║ ─ delsudo
-║ ─ listsudo
-║ ─ listgc
-║ ─ leaveall
-║ ─ del
-║ ─ setbio
-║ ─ setname
-║ ─ vv
-║ ─ pair
-║ ─ admin
-║ ─ leave
-║ ─ newgc
-║ ─ ban1
-║ ─ unban1
-║ ─ sudo
-║ ─ listban
-║ ─ autoviewstatus
-║ ─ autotyping
-║
-╚══════════════════╝
-╔══❰ 📥 ᴅᴏᴡɴʟᴏᴀᴅ ❱══╗
-║
-║ ─ ytmp3
-║ ─ ytb
-║ ─ song
-║ ─ play
-║ ─ mp4
-║ ─ fb
-║ ─ insta
-║ ─ tiktok
-║ ─ tiktok2
-║ ─ pint
-║ ─ apk
-║ ─ modapk
-║ ─ git
-║ ─ wastatus
-║ ─ drama
-║ ─ mega
-║ ─ autodownload
-║
-╚══════════════════╝
-╔══❰ 📸 ᴍᴇᴅɪᴀ ❱══╗
-║
-║ ─ sticker
-║ ─ s
-║ ─ sticker2img
-║ ─ toimage
-║ ─ remini
-║ ─ couplepp
-║ ─ dewatermark
-║ ─ pies
-║ ─ removebg
-║ ─ circle
-║ ─ imageinfo
-║ ─ gcpp
-║ ─ qrcode
-║
-╚══════════════════╝
-╔══❰ 🔍 sᴇᴀʀᴄʜ ❱══╗
-║
-║ ─ img
-║ ─ yts
-║ ─ iplookup
-║ ─ pinterestimg
-║ ─ lyrics
-║ ─ searchsticker
-║ ─ npm
-║ ─ github
-║ ─ npmstalk
-║ ─ ffstalk
-║ ─ simdata
-║ ─ screenshot
-║
-╚══════════════════╝
-╔══❰ 🎉 ғᴜɴ ❱══╗
-║
-║ ─ truth
-║ ─ dare
-║ ─ joke
-║ ─ ship
-║ ─ rate
-║ ─ flirt
-║ ─ roast
-║ ─ compliment
-║ ─ 8ball
-║ ─ advice
-║ ─ quote
-║ ─ emoji
-║ ─ marige
-║ ─ bacha
-║ ─ bachi
-║ ─ breakup
-║ ─ husband
-║ ─ wife
-║ ─ propose
-║ ─ crush
-║ ─ kiss
-║ ─ hug
-║ ─ slap
-║ ─ dance
-║ ─ cry
-║ ─ cuddle
-║ ─ bully
-║ ─ pat
-║ ─ wink
-║ ─ smile
-║ ─ happy
-║ ─ angry
-║ ─ coinflip
-║ ─ flip
-║ ─ pick
-║ ─ repeat
-║ ─ send
-║ ─ character
-║ ─ compatibility
-║ ─ aura
-║ ─ lovetest
-║ ─ loveletter
-║ ─ lovecalc2
-║ ─ ringtone
-║
-╚══════════════════╝
-╔══❰ 🎮 ɢᴀᴍᴇ ❱══╗
-║
-║ ─ rps
-║ ─ dice
-║ ─ coin
-║ ─ hangman
-║ ─ guess
-║ ─ math
-║ ─ emojiquiz
-║ ─ numberbattle
-║ ─ coinbattle
-║ ─ trivia
-║
-╚══════════════════╝
-╔══❰ 🎵 sᴏᴜɴᴅ ❱══╗
-║
-║ ─ tts
-║ ─ say
-║ ─ bass
-║ ─ nightcore
-║ ─ reverse
-║ ─ robot
-║ ─ slow
-║ ─ fast
-║
-╚══════════════════╝
-╔══❰ 🔧 ᴏᴛʜᴇʀ ❱══╗
-║
-║ ─ weather
-║ ─ wiki
-║ ─ currency
-║ ─ time
-║ ─ shorturl
-║ ─ myip
-║ ─ jid
-║ ─ imdb
-║ ─ dictionary
-║ ─ recipe
-║ ─ calculate
-║ ─ mathfact
-║ ─ sciencefact
-║ ─ horoscope
-║ ─ password
-║ ─ remind
-║ ─ news
-║ ─ cid
-║ ─ getpp
-║ ─ boost
-║
-╚══════════════════╝
-╔══❰ 🖼️ ʀᴀɴᴅᴏᴍ ❱══╗
-║
-║ ─ chinagirl
-║ ─ boypic
-║ ─ random-girl
-║ ─ hijab-girl
-║ ─ indonesia-girl
-║ ─ japan-girl
-║ ─ korean-girl
-║ ─ bluearchive
-║ ─ indo
-║ ─ china
-║ ─ korea
-║ ─ thailand
-║ ─ vietnam
-║ ─ loli
-║ ─ japan
-║ ─ couple
-║ ─ romance
-║ ─ intimatefg
-║
-╚══════════════════╝
-╔══❰ 🎌 ᴀɴɪᴍᴇ ❱══╗
-║
-║ ─ waifu
-║ ─ neko
-║ ─ kitsune
-║ ─ maid
-║ ─ animegirl
-║ ─ animeboy
-║ ─ catgirl
-║ ─ foxgirl
-║ ─ kawaii
-║ ─ chibi
-║ ─ idol
-║ ─ princess
-║ ─ warrior
-║ ─ samurai
-║ ─ demon
-║ ─ angel
-║ ─ vampire
-║ ─ dragon
-║ ─ magical
-║ ─ cyberpunk
-║ ─ ba
-║ ─ husbando
-║ ─ manga
-║ ─ cosplay
-║ ─ anime
-║
-╚══════════════════╝
-╔══❰ 🕹️ ʙᴏʏᴅᴘ ❱══╗
-║
-║ ─ boydp1
-║ ─ boydp2
-║ ─ boydp3
-║ ─ boydp4
-║ ─ boydp5
-║ ─ boydp6
-║ ─ boydp7
-║ ─ boydp8
-║ ─ boydp9
-║ ─ boydp10
-║ ─ boydp11
-║ ─ boydp12
-║ ─ boydp13
-║ ─ boydp14
-║ ─ boydp15
-║ ─ boydp16
-║ ─ boydp17
-║ ─ boydp18
-║ ─ boydp19
-║ ─ boydp20
-║ ─ boydp21
-║ ─ boydp22
-║
-╚══════════════════╝
-╔══❰ 👗 ɢɪʀʟᴅᴘ ❱══╗
-║
-║ ─ girldp1
-║ ─ girldp2
-║ ─ girldp3
-║ ─ girldp4
-║ ─ girldp5
-║ ─ girldp6
-║ ─ girldp7
-║ ─ girldp8
-║ ─ girldp9
-║ ─ girldp10
-║ ─ girldp11
-║ ─ girldp12
-║ ─ girldp13
-║ ─ girldp14
-║ ─ girldp15
-║ ─ girldp16
-║ ─ girldp17
-║ ─ girldp18
-║ ─ girldp19
-║ ─ girldp20
-║ ─ girldp21
-║ ─ girldp22
-║
-╚══════════════════╝
-╔══❰ 💬 ᴍᴀɪɴ ❱══╗
-║
-║ ─ menu
-║ ─ alive
-║ ─ ping
-║ ─ uptime
-║ ─ owner
-║ ─ repo
-║ ─ bot
-║ ─ bomb
-║ ─ ping2
-║
-╚══════════════════╝
+╔══[ 🧠 ᴀɪ ]══╗
+║ ▶ ai
+║ ▶ gpt
+║ ▶ gemini
+║ ▶ deepseek
+║ ▶ grok-ai
+║ ▶ codeai
+║ ▶ storyai
+║ ▶ triviaai
+║ ▶ photoai
+╚══════════════════════╝
+╔══[ 👥 ɢʀᴏᴜᴘᴇ ]══╗
+║ ▶ tagall
+║ ▶ hidetag
+║ ▶ promote
+║ ▶ demote
+║ ▶ kick
+║ ▶ add
+║ ▶ mute
+║ ▶ unmute
+║ ▶ grouplink
+║ ▶ resetlink
+║ ▶ kickall
+║ ▶ listadmins
+║ ▶ groupinfo
+║ ▶ subject
+║ ▶ desc
+║ ▶ left
+║ ▶ join
+║ ▶ poll
+║ ▶ warn
+║ ▶ lock
+║ ▶ unlock
+║ ▶ creategroup
+╚══════════════════════╝
+╔══[ 👑 ᴏᴡɴᴇʀ ]══╗
+║ ▶ ping
+║ ▶ alive
+║ ▶ mode
+║ ▶ block
+║ ▶ unblock
+║ ▶ broadcast
+║ ▶ addsudo
+║ ▶ delsudo
+║ ▶ listsudo
+║ ▶ listgc
+║ ▶ leaveall
+║ ▶ del
+║ ▶ setbio
+║ ▶ setname
+║ ▶ vv
+║ ▶ pair
+║ ▶ admin
+║ ▶ leave
+║ ▶ newgc
+║ ▶ ban1
+║ ▶ unban1
+║ ▶ sudo
+║ ▶ listban
+║ ▶ autoviewstatus
+║ ▶ autotyping
+╚══════════════════════╝
+╔══[ 📥 ᴅᴏᴡɴʟᴏᴀᴅ ]══╗
+║ ▶ ytmp3
+║ ▶ ytb
+║ ▶ song
+║ ▶ play
+║ ▶ mp4
+║ ▶ fb
+║ ▶ insta
+║ ▶ tiktok
+║ ▶ tiktok2
+║ ▶ pint
+║ ▶ apk
+║ ▶ modapk
+║ ▶ git
+║ ▶ wastatus
+║ ▶ drama
+║ ▶ mega
+║ ▶ autodownload
+╚══════════════════════╝
+╔══[ 📸 ᴍᴇᴅɪᴀ ]══╗
+║ ▶ sticker
+║ ▶ s
+║ ▶ sticker2img
+║ ▶ toimage
+║ ▶ remini
+║ ▶ couplepp
+║ ▶ dewatermark
+║ ▶ pies
+║ ▶ removebg
+║ ▶ circle
+║ ▶ imageinfo
+║ ▶ gcpp
+║ ▶ qrcode
+╚══════════════════════╝
+╔══[ 🔍 sᴇᴀʀᴄʜ ]══╗
+║ ▶ img
+║ ▶ yts
+║ ▶ iplookup
+║ ▶ pinterestimg
+║ ▶ lyrics
+║ ▶ searchsticker
+║ ▶ npm
+║ ▶ github
+║ ▶ npmstalk
+║ ▶ ffstalk
+║ ▶ simdata
+║ ▶ screenshot
+╚══════════════════════╝
+╔══[ 🎉 ғᴜɴ ]══╗
+║ ▶ truth
+║ ▶ dare
+║ ▶ joke
+║ ▶ ship
+║ ▶ rate
+║ ▶ flirt
+║ ▶ roast
+║ ▶ compliment
+║ ▶ 8ball
+║ ▶ advice
+║ ▶ quote
+║ ▶ emoji
+║ ▶ marige
+║ ▶ bacha
+║ ▶ bachi
+║ ▶ breakup
+║ ▶ husband
+║ ▶ wife
+║ ▶ propose
+║ ▶ crush
+║ ▶ kiss
+║ ▶ hug
+║ ▶ slap
+║ ▶ dance
+║ ▶ cry
+║ ▶ cuddle
+║ ▶ bully
+║ ▶ pat
+║ ▶ wink
+║ ▶ smile
+║ ▶ happy
+║ ▶ angry
+║ ▶ coinflip
+║ ▶ flip
+║ ▶ pick
+║ ▶ repeat
+║ ▶ send
+║ ▶ character
+║ ▶ compatibility
+║ ▶ aura
+║ ▶ lovetest
+║ ▶ ringtone
+╚══════════════════════╝
+╔══[ 🎮 ɢᴀᴍᴇ ]══╗
+║ ▶ rps
+║ ▶ dice
+║ ▶ coin
+║ ▶ hangman
+║ ▶ guess
+║ ▶ math
+║ ▶ emojiquiz
+║ ▶ numberbattle
+║ ▶ coinbattle
+║ ▶ trivia
+╚══════════════════════╝
+╔══[ 🎵 sᴏᴜɴᴅ ]══╗
+║ ▶ tts
+║ ▶ say
+║ ▶ bass
+║ ▶ nightcore
+║ ▶ reverse
+║ ▶ robot
+║ ▶ slow
+║ ▶ fast
+╚══════════════════════╝
+╔══[ 🔧 ᴏᴛʜᴇʀ ]══╗
+║ ▶ weather
+║ ▶ wiki
+║ ▶ currency
+║ ▶ time
+║ ▶ shorturl
+║ ▶ myip
+║ ▶ jid
+║ ▶ imdb
+║ ▶ dictionary
+║ ▶ recipe
+║ ▶ calculate
+║ ▶ mathfact
+║ ▶ sciencefact
+║ ▶ horoscope
+║ ▶ password
+║ ▶ remind
+║ ▶ news
+║ ▶ cid
+║ ▶ getpp
+║ ▶ boost
+╚══════════════════════╝
+╔══[ 🖼️ ʀᴀɴᴅᴏᴍ ]══╗
+║ ▶ chinagirl
+║ ▶ boypic
+║ ▶ random-girl
+║ ▶ hijab-girl
+║ ▶ indonesia-girl
+║ ▶ japan-girl
+║ ▶ korean-girl
+║ ▶ bluearchive
+║ ▶ indo
+║ ▶ china
+║ ▶ korea
+║ ▶ thailand
+║ ▶ vietnam
+║ ▶ loli
+║ ▶ japan
+║ ▶ couple
+║ ▶ romance
+╚══════════════════════╝
+╔══[ 🎌 ᴀɴɪᴍᴇ ]══╗
+║ ▶ waifu
+║ ▶ neko
+║ ▶ kitsune
+║ ▶ maid
+║ ▶ animegirl
+║ ▶ animeboy
+║ ▶ catgirl
+║ ▶ foxgirl
+║ ▶ kawaii
+║ ▶ chibi
+║ ▶ idol
+║ ▶ princess
+║ ▶ warrior
+║ ▶ samurai
+║ ▶ demon
+║ ▶ angel
+║ ▶ vampire
+║ ▶ dragon
+║ ▶ magical
+║ ▶ cyberpunk
+║ ▶ ba
+║ ▶ husbando
+║ ▶ manga
+║ ▶ cosplay
+║ ▶ anime
+╚══════════════════════╝
+╔══[ 🕹️ ʙᴏʏᴅᴘ ]══╗
+║ ▶ boydp1
+║ ▶ boydp2
+║ ▶ boydp3
+║ ▶ boydp4
+║ ▶ boydp5
+║ ▶ boydp6
+║ ▶ boydp7
+║ ▶ boydp8
+║ ▶ boydp9
+║ ▶ boydp10
+║ ▶ boydp11
+║ ▶ boydp12
+║ ▶ boydp13
+║ ▶ boydp14
+║ ▶ boydp15
+║ ▶ boydp16
+║ ▶ boydp17
+║ ▶ boydp18
+║ ▶ boydp19
+║ ▶ boydp20
+║ ▶ boydp21
+║ ▶ boydp22
+╚══════════════════════╝
+╔══[ 👗 ɢɪʀʟᴅᴘ ]══╗
+║ ▶ girldp1
+║ ▶ girldp2
+║ ▶ girldp3
+║ ▶ girldp4
+║ ▶ girldp5
+║ ▶ girldp6
+║ ▶ girldp7
+║ ▶ girldp8
+║ ▶ girldp9
+║ ▶ girldp10
+║ ▶ girldp11
+║ ▶ girldp12
+║ ▶ girldp13
+║ ▶ girldp14
+║ ▶ girldp15
+║ ▶ girldp16
+║ ▶ girldp17
+║ ▶ girldp18
+║ ▶ girldp19
+║ ▶ girldp20
+║ ▶ girldp21
+║ ▶ girldp22
+╚══════════════════════╝
+╔══[ 💬 ᴍᴀɪɴ ]══╗
+║ ▶ menu
+║ ▶ alive
+║ ▶ ping
+║ ▶ uptime
+║ ▶ owner
+║ ▶ repo
+║ ▶ bot
+║ ▶ bomb
+║ ▶ ping2
+╚══════════════════════╝
 ${config.BOT_FOOTER}`;
 
   try {
