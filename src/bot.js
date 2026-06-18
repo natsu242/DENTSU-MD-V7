@@ -66,11 +66,6 @@ async function startSession(number) {
     if (connection === 'open') {
       console.log(`[${sanitized}] ✅ Session connectée avec succès!`);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
-
-      // Setup des handlers une fois connecté
-      sock.ev.on('messages.upsert', async (m) => {
-        try { await messageHandler(sock, m); } catch(e) {}
-      });
       await setupStatusHandlers(sock).catch(() => {});
 
       // Message de bienvenue
