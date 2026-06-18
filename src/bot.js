@@ -4,6 +4,7 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  Browsers,
   delay,
 } = require('baileys');
 const pino = require('pino');
@@ -24,6 +25,11 @@ async function startSession(number) {
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
   const { version } = await fetchLatestBaileysVersion();
 
+  // Browsers.macOS est un tableau dans @trashcore/baileys — ne pas appeler comme fonction
+  const browserValue = typeof Browsers.macOS === 'function'
+    ? Browsers.macOS('Safari')
+    : Browsers.macOS;
+
   const sock = makeWASocket({
     version,
     logger,
@@ -32,7 +38,7 @@ async function startSession(number) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    browser: ['Mac OS X', 'Safari', '605.1.15'],
+    browser: browserValue,
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 25000,
