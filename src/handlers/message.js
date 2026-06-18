@@ -1,5 +1,5 @@
 const config = require('../config');
-const { getContentType, jidNormalizedUser, delay } = require('@whiskeysockets/baileys');
+const { getContentType, jidNormalizedUser, delay } = require('baileys');
 const { getTimestamp, getTime, getDate, getRam, getUptime, countCommands, getHost, sleep } = require('../lib/utils');
 const { isOwner } = require('../lib/utils');
 
