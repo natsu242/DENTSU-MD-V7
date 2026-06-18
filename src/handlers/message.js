@@ -12,16 +12,30 @@ async function messageHandler(sock, { messages, type }) {
 
   const msg = messages[0];
   if (!msg?.message) return;
-  if (msg.key.fromMe) return;
 
   // Sécurité : sock.user peut être null pendant la phase de connexion
   if (!sock.user) return;
 
   const from        = msg.key.remoteJid;
+  if (!from) return;
+
   const isGroup     = from.endsWith('@g.us');
-  const sender      = isGroup ? msg.key.participant : from;
+  const sender      = isGroup
+    ? (msg.key.participant || msg.key.fromMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : from)
+    : from;
   const senderNumber = sender?.split('@')[0];
-  const botNumber   = jidNormalizedUser(sock.user.id);
+  const botJid      = jidNormalizedUser(sock.user.id);
+  const botNumber   = sock.user.id.split(':')[0];
+
+  // Bloquer seulement les messages envoyés par le BOT lui-même (réponses automatiques)
+  // mais permettre les messages de l'owner depuis son propre numéro (fromMe = true)
+  if (msg.key.fromMe) {
+    // Si c'est le bot qui répond à quelqu'un d'autre, on ignore (évite les boucles)
+    // On laisse passer uniquement si c'est le bot messagant son propre chat (test owner)
+    const ownerJid = config.OWNER_NUMBER + '@s.whatsapp.net';
+    // Si from n'est pas le numéro owner, c'est le bot qui répond → ignorer
+    if (from !== ownerJid) return;
+  }
 
   // ── Dérouler les messages éphémères / view-once / document-with-caption ──
   const rawMsg = msg.message?.ephemeralMessage?.message
@@ -97,7 +111,7 @@ async function messageHandler(sock, { messages, type }) {
   const ctx = {
     sock, msg, from, sender, senderNumber, isGroup,
     args, text, quoted, reply, sendImage,
-    command, prefix: usedPrefix || config.PREFIX, botNumber,
+    command, prefix: usedPrefix || config.PREFIX, botNumber, botJid,
     isOwner: isOwner(sender),
   };
 
@@ -175,21 +189,14 @@ async function sendMainMenu(ctx) {
 💬 *Groupe* : ${config.GROUP_LINK}
 ✈️ *Telegram* : ${config.TELEGRAM}
 ━━━━━━━━━━━━━━━━━━━━━
-💡 Fonctionne avec : .menu  !menu  /menu  menu
+💡 .menu  !menu  /menu  menu — tous fonctionnent
 ${config.BOT_FOOTER}`;
 
-  try {
-    return await sock.sendMessage(from, {
-      image: { url: config.MENU_IMAGE },
-      caption: menuText,
-      mentions: [sender],
-    }, { quoted: msg });
-  } catch (_) {
-    return await sock.sendMessage(from, {
-      text: menuText,
-      mentions: [sender],
-    }, { quoted: msg });
-  }
+  // Envoyer texte seul (plus fiable que l'image pour le menu)
+  return sock.sendMessage(from, {
+    text: menuText,
+    mentions: [sender],
+  }, { quoted: msg });
 }
 
 module.exports = { messageHandler, sendMainMenu };
