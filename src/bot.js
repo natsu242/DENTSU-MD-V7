@@ -4,6 +4,7 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  Browsers,
   delay,
 } = require('baileys');
 const pino = require('pino');
@@ -32,12 +33,14 @@ async function startSession(number) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    browser: ['Ubuntu', 'Chrome', '22.0.0'],
+    browser: Browsers.macOS('Safari'),
     connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 25000,
     retryRequestDelayMs: 2000,
     generateHighQualityLinkPreview: true,
     markOnlineOnConnect: true,
+    syncFullHistory: false,
   });
 
   // ── Sauvegarder les credentials ──────────────────────────────────────────
@@ -68,9 +71,12 @@ async function startSession(number) {
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
         console.log(`[${sanitized}] Session supprimée (logout)`);
+      } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
+        console.log(`[${sanitized}] Restart requis (pairing OK), reconnexion immédiate...`);
+        setTimeout(() => reconnectSession(sanitized), 1500);
       } else {
-        console.log(`[${sanitized}] Reconnexion dans 8s...`);
-        setTimeout(() => reconnectSession(sanitized), 8000);
+        console.log(`[${sanitized}] Reconnexion dans 5s...`);
+        setTimeout(() => reconnectSession(sanitized), 5000);
       }
       return;
     }
