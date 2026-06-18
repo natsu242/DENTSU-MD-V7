@@ -29,13 +29,20 @@ async function messageHandler(sock, { messages, type }) {
   const botNumber = jidNormalizedUser(sock.user.id);
   const prefix = config.PREFIX;
 
-  const mtype = getContentType(msg.message);
-  const body = mtype === 'conversation' ? msg.message.conversation
-    : mtype === 'imageMessage' ? msg.message.imageMessage?.caption || ''
-    : mtype === 'videoMessage' ? msg.message.videoMessage?.caption || ''
-    : mtype === 'extendedTextMessage' ? msg.message.extendedTextMessage?.text || ''
-    : mtype === 'buttonsResponseMessage' ? msg.message.buttonsResponseMessage?.selectedButtonId || ''
-    : mtype === 'listResponseMessage' ? msg.message.listResponseMessage?.singleSelectReply?.selectedRowId || ''
+  // Dérouler les messages éphémères / view-once / document-with-caption
+  const rawMsg = msg.message?.ephemeralMessage?.message
+    || msg.message?.viewOnceMessage?.message
+    || msg.message?.viewOnceMessageV2?.message?.message
+    || msg.message?.documentWithCaptionMessage?.message
+    || msg.message;
+
+  const mtype = getContentType(rawMsg);
+  const body = mtype === 'conversation' ? rawMsg.conversation
+    : mtype === 'imageMessage' ? rawMsg.imageMessage?.caption || ''
+    : mtype === 'videoMessage' ? rawMsg.videoMessage?.caption || ''
+    : mtype === 'extendedTextMessage' ? rawMsg.extendedTextMessage?.text || ''
+    : mtype === 'buttonsResponseMessage' ? rawMsg.buttonsResponseMessage?.selectedButtonId || ''
+    : mtype === 'listResponseMessage' ? rawMsg.listResponseMessage?.singleSelectReply?.selectedRowId || ''
     : '';
 
   const isCmd = body.startsWith(prefix);
@@ -44,7 +51,7 @@ async function messageHandler(sock, { messages, type }) {
   const command = body.slice(prefix.length).trim().split(/ +/).shift().toLowerCase();
   const args = body.trim().split(/ +/).slice(1);
   const text = args.join(' ');
-  const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const quoted = rawMsg?.extendedTextMessage?.contextInfo?.quotedMessage;
 
   // Auto-typing
   if (config.AUTO_TYPING) {
