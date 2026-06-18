@@ -4,6 +4,7 @@ module.exports = {
   BOT_NAME: process.env.BOT_NAME || 'DENTSU MD V7',
   DEV_NAME: process.env.DEV_NAME || 'Natsu Tech',
   PREFIX: process.env.PREFIX || '.',
+  PREFIXES: (process.env.PREFIXES || '.,!,/,#,$').split(',').map(p => p.trim()).filter(Boolean),
   MODE: process.env.MODE || 'public',
   OWNER_NUMBER: process.env.OWNER_NUMBER || '242065121108',
   BOT_FOOTER: process.env.BOT_FOOTER || '> 𝙼𝙰𝙳𝙴 𝙱𝚈 𝙽𝙰𝚃𝚂𝚄𝚘𝚛𝙳𝙴𝙽𝚃𝚂𝚄',
