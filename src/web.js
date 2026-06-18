@@ -35,7 +35,6 @@ app.post('/pair', async (req, res) => {
   let { number } = req.body;
   if (!number) return res.json({ success: false, error: 'Numéro requis' });
 
-  // Nettoyer le numéro (garder que les chiffres)
   const sanitized = number.replace(/[^0-9]/g, '');
 
   if (sanitized.length < 7 || sanitized.length > 15) {
@@ -61,7 +60,6 @@ app.post('/pair', async (req, res) => {
     const { code } = await startSession(sanitized);
 
     if (code) {
-      // Retirer de la liste pending après 60s (timeout)
       setTimeout(() => pendingPairs.delete(sanitized), 60000);
       return res.json({
         success: true,
@@ -75,15 +73,24 @@ app.post('/pair', async (req, res) => {
 
   } catch (err) {
     pendingPairs.delete(sanitized);
-    console.error(`[WEB] Pair error ${sanitized}:`, err.message);
+    const raw = err.message || String(err);
+    console.error(`[WEB] Pair error ${sanitized}:`, raw);
 
-    let errorMsg = err.message;
-    if (err.message.includes('timed out') || err.message.includes('timeout')) {
-      errorMsg = 'Timeout: Le numéro ne répond pas. Vérifie que WhatsApp est installé et actif sur ce numéro.';
-    } else if (err.message.includes('rate-limit') || err.message.includes('429')) {
-      errorMsg = 'Trop de demandes. Attends quelques minutes et réessaie.';
-    } else if (err.message.includes('not registered') || err.message.includes('404')) {
+    // Traduction des erreurs connues en messages clairs
+    let errorMsg = raw;
+
+    if (raw.includes('timed out') || raw.includes('timeout')) {
+      errorMsg = 'Délai dépassé. Vérifie ta connexion internet et réessaie.';
+    } else if (raw.includes('rate-limit') || raw.includes('429') || raw.includes('rate limit')) {
+      errorMsg = 'Trop de demandes. Attends 2 minutes et réessaie.';
+    } else if (raw.includes('not registered') || raw.includes('404') || raw.includes('not-registered')) {
       errorMsg = 'Ce numéro n\'est pas enregistré sur WhatsApp.';
+    } else if (raw.includes('Connection Closed') || raw.includes('connection closed')) {
+      errorMsg = 'Connexion perdue. Redémarre le bot et réessaie.';
+    } else if (raw.includes('Unauthorized') || raw.includes('401')) {
+      errorMsg = 'Erreur d\'autorisation. Supprime le dossier session et redémarre.';
+    } else if (raw.includes('Stream Errored') || raw.includes('stream')) {
+      errorMsg = 'Erreur de flux WhatsApp. Attends 30s et réessaie.';
     }
 
     return res.json({ success: false, error: errorMsg });
