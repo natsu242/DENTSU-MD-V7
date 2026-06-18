@@ -16,15 +16,14 @@ async function messageHandler(sock, { messages, type }) {
   if (!from) return;
   if (from === 'status@broadcast') return;
 
-  const isGroup   = from.endsWith('@g.us');
-  const botJid    = jidNormalizedUser(sock.user.id);
-  const botNumber = sock.user.id.split(':')[0];
+  const isGroup    = from.endsWith('@g.us');
+  const botJid     = jidNormalizedUser(sock.user.id);
+  const botNumber  = sock.user.id.split(':')[0];
   const botFullJid = botNumber + '@s.whatsapp.net';
 
   const sender = isGroup
     ? (msg.key.fromMe ? botFullJid : (msg.key.participant || from))
     : (msg.key.fromMe ? botFullJid : from);
-
   const senderNumber = sender?.split('@')[0];
 
   const rawMsg = msg.message?.ephemeralMessage?.message
@@ -50,7 +49,6 @@ async function messageHandler(sock, { messages, type }) {
 
   const PREFIXES = config.PREFIXES || ['.', '!', '/', '#', '$'];
   let usedPrefix = '', command = '', args = [];
-
   for (const p of PREFIXES) {
     if (body.startsWith(p)) {
       usedPrefix = p;
@@ -60,12 +58,10 @@ async function messageHandler(sock, { messages, type }) {
       break;
     }
   }
-
   if (!command) {
     const lw = body.trim().toLowerCase();
     if (NO_PREFIX_CMDS.has(lw)) { command = lw; usedPrefix = ''; args = []; }
   }
-
   if (!command) return;
 
   const text   = args.join(' ');
@@ -110,40 +106,35 @@ async function messageHandler(sock, { messages, type }) {
 async function sendMainMenu(ctx) {
   const { sock, from, msg, senderNumber, sender } = ctx;
 
-  let totalCmds = 0;
-  try { totalCmds = await countCommands(); } catch (_) {}
-
   const caption =
-`╔══════════════════════╗
-║   🤖 *DENTSU MD V7*  ║
-╚══════════════════════╝
+`┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃      🤖  *DENTSU MD V7*      ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+┃ 📌 *Version*  :  V7
+┃ 👨‍💻 *Dev*      :  Natsu Tech
+┃ 📅 *Date*     :  ${getDate()}
+┃ ⏰ *Heure*    :  ${getTime()}
+┃ 👤 *User*     :  @${senderNumber}
+┃ 🌐 *Mode*     :  ${config.MODE.toUpperCase()}
+┃ 🖥️ *RAM*      :  ${getRam()}
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 
-┌─────────────────────────
-│ 📌 *Version* : V7
-│ 👨‍💻 *Dev* : Natsu Tech
-│ 📅 *Date* : ${getDate()}
-│ ⏰ *Heure* : ${getTime()}
-│ 👤 *User* : @${senderNumber}
-│ 🌐 *Mode* : ${config.MODE.toUpperCase()}
-│ 🖥️ *RAM* : ${getRam()}
-│ 🌍 *Host* : ${getHost()}
-└─────────────────────────
+┏━━[ 📋 *COMMANDES* ]━━┓
 
-*📋 CATÉGORIES DE COMMANDES*
+1️⃣  ┃ ▸ 🧠 *AI*           →  *.aimenu*
+2️⃣  ┃ ▸ 👥 *GROUPE*       →  *.groupmenu*
+3️⃣  ┃ ▸ 👑 *OWNER*        →  *.ownermenu*
+4️⃣  ┃ ▸ 🎉 *FUN*          →  *.funmenu*
+5️⃣  ┃ ▸ 🎮 *GAME*         →  *.gamemenu*
+6️⃣  ┃ ▸ 🎵 *SOUND*        →  *.soundmenu*
+7️⃣  ┃ ▸ 🔧 *OTHER*        →  *.othermenu*
+8️⃣  ┃ ▸ 📥 *DOWNLOADER*   →  *.dlmenu*
+9️⃣  ┃ ▸ 📸 *MEDIA*        →  *.mediamenu*
+🔟  ┃ ▸ 🔍 *SEARCH*        →  *.searchmenu*
+1️⃣1️⃣ ┃ ▸ 🖼️ *RANDOM IMG*  →  *.randommenu*
+1️⃣2️⃣ ┃ ▸ 🎌 *ANIME*       →  *.animemenu*
 
-1️⃣  🧠 AI MENU          → *.aimenu*
-2️⃣  👥 GROUP MENU       → *.groupmenu*
-3️⃣  👑 OWNER MENU       → *.ownermenu*
-4️⃣  🎉 FUN MENU         → *.funmenu*
-5️⃣  🎮 GAME MENU        → *.gamemenu*
-6️⃣  🎵 SOUND MENU       → *.soundmenu*
-7️⃣  🔧 OTHER MENU       → *.othermenu*
-8️⃣  📥 DOWNLOADER       → *.dlmenu*
-9️⃣  📸 MEDIA MENU       → *.mediamenu*
-🔟  🔍 SEARCH MENU      → *.searchmenu*
-1️⃣1️⃣ 🖼️  RANDOM IMAGE   → *.randommenu*
-1️⃣2️⃣ 🎌 ANIME MENU      → *.animemenu*
-
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ${config.BOT_FOOTER}`;
 
   try {
