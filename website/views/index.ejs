@@ -3,226 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DENTSU MD V7 - Connexion Bot WhatsApp</title>
+  <title><%= botName %> — Site de Connexion</title>
   <link rel="stylesheet" href="/style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/png" href="<%= menuImage %>">
 </head>
 <body>
-  <!-- Animated background -->
-  <div class="bg-grid"></div>
-  <div class="particles" id="particles"></div>
+  <div class="bg-glow"></div>
 
-  <!-- Header -->
-  <header class="header">
-    <div class="header-inner">
-      <div class="logo-section">
-        <img src="<%= menuImage %>" alt="DENTSU MD V7" class="logo">
-        <div class="logo-text">
-          <h1>DENTSU MD <span class="v7">V7</span></h1>
-          <p>by <%= devName %></p>
-        </div>
-      </div>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <img src="<%= menuImage %>" alt="Menu" class="bot-image" onerror="this.style.display='none'">
+      <h1 class="bot-name">🤖 <%= botName %></h1>
+      <p class="dev-name">by <%= devName %></p>
       <div class="session-badge">
-        <div class="session-dot"></div>
-        <span id="sessionCount"><%= sessions %></span>/<%= maxSessions %> sessions
+        <span class="dot"></span>
+        <span><%= sessions %>/<%= maxSessions %> sessions actives</span>
       </div>
     </div>
-  </header>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <div class="hero-content">
-      <div class="hero-left">
-        <div class="badge-new">🤖 Multi-Session WhatsApp Bot</div>
-        <h2 class="hero-title">
-          Connecte ton<br>
-          <span class="gradient-text">WhatsApp</span><br>
-          en quelques secondes
-        </h2>
-        <p class="hero-desc">
-          Plus de 200 commandes • Multi-sessions (50 users) • IA intégrée •
-          Auto-status • Groupes • Divertissement
-        </p>
+    <!-- Card principale -->
+    <div class="card">
+      <h2>📱 Connecter WhatsApp</h2>
+      <p class="subtitle">Entre ton numéro avec le code pays pour obtenir ton code de jumelage</p>
 
-        <div class="feature-pills">
-          <span class="pill">🧠 AI/GPT</span>
-          <span class="pill">👥 Groupes</span>
-          <span class="pill">🎮 Jeux</span>
-          <span class="pill">📥 Download</span>
-          <span class="pill">🎵 Audio</span>
-          <span class="pill">🎌 Anime</span>
+      <form id="pairForm">
+        <div class="input-group">
+          <span class="flag">🌍</span>
+          <input
+            type="tel"
+            id="number"
+            placeholder="Ex: 242065121108"
+            maxlength="15"
+            autocomplete="off"
+            inputmode="numeric"
+          >
         </div>
+        <p class="hint">⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)</p>
+        <button id="pairBtn" type="submit">📲 Obtenir mon code</button>
+      </form>
+
+      <!-- Résultat -->
+      <div id="result" style="display:none;" class="result"></div>
+
+      <!-- Affichage du code -->
+      <div id="codeDisplay" style="display:none;" class="code-box">
+        <p class="code-label">🔑 Ton code de jumelage :</p>
+        <div class="code-value" id="codeValue"></div>
+        <button id="copyBtn" class="copy-btn">📋 Copier le code</button>
       </div>
 
-      <div class="hero-right">
-        <!-- Pairing Card -->
-        <div class="pair-card" id="pairCard">
-          <div class="card-header">
-            <div class="whatsapp-icon">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            </div>
-            <div>
-              <h3>Connexion WhatsApp</h3>
-              <p>Pairing Code - Sans QR Code</p>
-            </div>
-          </div>
-
-          <div class="steps">
-            <div class="step"><span class="step-num">1</span><span>Entre ton numéro WhatsApp</span></div>
-            <div class="step"><span class="step-num">2</span><span>Reçois ton code de jumelage</span></div>
-            <div class="step"><span class="step-num">3</span><span>WhatsApp → Appareils liés → Lier avec code</span></div>
-          </div>
-
-          <form id="pairForm">
-            <div class="input-group">
-              <label>Numéro WhatsApp</label>
-              <div class="input-wrap">
-                <span class="input-icon">📱</span>
-                <input
-                  type="tel"
-                  id="phoneNumber"
-                  placeholder="ex: 242065121108 (avec indicatif)"
-                  autocomplete="tel"
-                  required
-                >
-              </div>
-              <small>Format: indicatif pays + numéro (sans +, sans espaces)</small>
-            </div>
-
-            <button type="submit" class="btn-pair" id="pairBtn">
-              <span class="btn-text">🔗 Obtenir mon code de jumelage</span>
-              <span class="btn-loader" style="display:none">
-                <svg viewBox="0 0 24 24" class="spin"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="31.4" stroke-dashoffset="10"/></svg>
-                Connexion en cours...
-              </span>
-            </button>
-          </form>
-
-          <!-- Result box -->
-          <div id="resultBox" style="display:none"></div>
+      <!-- Étapes -->
+      <div id="steps" style="display:none;" class="steps-box">
+        <h3>📋 Comment entrer le code dans WhatsApp :</h3>
+        <ol>
+          <li>Ouvre <strong>WhatsApp</strong> sur ton téléphone</li>
+          <li>Appuie sur les <strong>3 points</strong> (menu) en haut à droite</li>
+          <li>Va dans <strong>Appareils liés</strong></li>
+          <li>Appuie sur <strong>Lier un appareil</strong></li>
+          <li>Choisis <strong>"Lier avec un numéro de téléphone"</strong> (pas le QR)</li>
+          <li>Entre le code <strong><span id="codeInSteps"></span></strong> affiché ci-dessus</li>
+          <li>✅ Le bot se connecte automatiquement !</li>
+        </ol>
+        <div class="warning-box">
+          ⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !
         </div>
       </div>
     </div>
-  </section>
 
-  <!-- Menu Preview Section -->
-  <section class="menu-preview">
-    <h2 class="section-title">📱 Aperçu du Bot</h2>
-    <div class="menu-image-container">
-      <img src="<%= menuImage %>" alt="Menu DENTSU MD V7" class="menu-preview-img">
-      <div class="menu-overlay">
-        <p>📋 200+ commandes disponibles</p>
-      </div>
+    <!-- Liens sociaux -->
+    <div class="social-links">
+      <% if (channelLink) { %><a href="<%= channelLink %>" target="_blank" class="social-btn">📢 Canal</a><% } %>
+      <% if (groupLink) { %><a href="<%= groupLink %>" target="_blank" class="social-btn">👥 Groupe</a><% } %>
+      <% if (telegram) { %><a href="<%= telegram %>" target="_blank" class="social-btn">✈️ Telegram</a><% } %>
     </div>
-  </section>
 
-  <!-- Commands Section -->
-  <section class="commands-section">
-    <h2 class="section-title">⚡ Catégories de Commandes</h2>
-    <div class="commands-grid">
-      <div class="cmd-card">
-        <div class="cmd-icon">🧠</div>
-        <h3>AI / Intelligence</h3>
-        <p>GPT, Gemini, Grok, DeepSeek, MetaAI, Qwen, Photo AI, Story AI</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">👥</div>
-        <h3>Gestion Groupes</h3>
-        <p>TagAll, Kick, Promote, Demote, Antilink, Welcome, Goodbye, Mute</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">📥</div>
-        <h3>Téléchargements</h3>
-        <p>YouTube MP3/MP4, Facebook, Instagram, Pinterest, APK, Mega</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">🎮</div>
-        <h3>Jeux</h3>
-        <p>Pierre/Feuille/Ciseaux, Pendu, TicTacToe, Math, Emoji Quiz, Guess</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">🎉</div>
-        <h3>Fun & Social</h3>
-        <p>Truth/Dare, Ship, Rate, Flirt, Roast, 8-Ball, Horoscope</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">🎌</div>
-        <h3>Anime</h3>
-        <p>Waifu, Neko, Maid, Anime Search, Manga, Lyrics, Character</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">📸</div>
-        <h3>Médias</h3>
-        <p>Sticker, Remini HD, Sticker→Image, QR Code, Image Search</p>
-      </div>
-      <div class="cmd-card">
-        <div class="cmd-icon">🔧</div>
-        <h3>Utilitaires</h3>
-        <p>Météo, Wikipedia, Currency, TTS, URL Courte, IP Lookup, GitHub</p>
-      </div>
-    </div>
-  </section>
+    <p class="footer">© 2025 <%= devName %> • Tous droits réservés</p>
+  </div>
 
-  <!-- Stats Section -->
-  <section class="stats-section">
-    <div class="stat-item">
-      <div class="stat-num" data-target="200">0</div>
-      <div class="stat-label">Commandes+</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num" data-target="50">0</div>
-      <div class="stat-label">Sessions Max</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num" data-target="12">0</div>
-      <div class="stat-label">Catégories</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num" data-target="24">0</div>
-      <div class="stat-label">h/24 Online</div>
-    </div>
-  </section>
-
-  <!-- Links Section -->
-  <section class="links-section">
-    <h2 class="section-title">🔗 Rejoins la communauté</h2>
-    <div class="links-grid">
-      <a href="<%= channelLink %>" target="_blank" class="link-card whatsapp">
-        <span class="link-icon">📢</span>
-        <span>Canal WhatsApp 1</span>
-        <span class="link-arrow">→</span>
-      </a>
-      <a href="<%= groupLink %>" target="_blank" class="link-card whatsapp">
-        <span class="link-icon">💬</span>
-        <span>Groupe WhatsApp</span>
-        <span class="link-arrow">→</span>
-      </a>
-      <a href="<%= telegram %>" target="_blank" class="link-card telegram">
-        <span class="link-icon">✈️</span>
-        <span>Telegram</span>
-        <span class="link-arrow">→</span>
-      </a>
-      <a href="<%= website %>" target="_blank" class="link-card web">
-        <span class="link-icon">🌐</span>
-        <span>Site Web</span>
-        <span class="link-arrow">→</span>
-      </a>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <img src="<%= menuImage %>" alt="DENTSU MD V7" class="footer-logo">
-    <div class="footer-text">
-      <h3>DENTSU MD V7</h3>
-      <p>Made with ❤️ by <strong><%= devName %></strong></p>
-      <p class="footer-copy">© 2025 DENTSU MD V7 • Tous droits réservés</p>
-    </div>
-  </footer>
-
+  <script>
+    // Passer le code aux étapes aussi
+    const origUpdate = window.__updateCode;
+  </script>
   <script src="/app.js"></script>
+  <script>
+    // Sync code dans les étapes
+    const codeInSteps = document.getElementById('codeInSteps');
+    const codeValue = document.getElementById('codeValue');
+    const observer = new MutationObserver(() => {
+      if (codeInSteps) codeInSteps.textContent = codeValue.textContent;
+    });
+    observer.observe(codeValue, { childList: true, characterData: true, subtree: true });
+  </script>
 </body>
 </html>
