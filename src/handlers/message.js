@@ -1,33 +1,20 @@
 const config = require('../config');
-const { getContentType, jidNormalizedUser, delay } = require('baileys');
-const { getTimestamp, getTime, getDate, getRam, getUptime, countCommands, getHost, sleep } = require('../lib/utils');
+const { getContentType, jidNormalizedUser } = require('baileys');
+const { getTimestamp, getTime, getDate, getRam, getUptime, countCommands, getHost } = require('../lib/utils');
 const { isOwner } = require('../lib/utils');
-
-// Import tous les plugins
-const aiPlugin = require('../plugins/ai');
-const groupPlugin = require('../plugins/group');
-const ownerPlugin = require('../plugins/owner');
-const funPlugin = require('../plugins/fun');
-const gamePlugin = require('../plugins/game');
-const soundPlugin = require('../plugins/sound');
-const otherPlugin = require('../plugins/other');
-const downloadPlugin = require('../plugins/downloader');
-const mediaPlugin = require('../plugins/media');
-const searchPlugin = require('../plugins/search');
-const randomPlugin = require('../plugins/random');
-const animePlugin = require('../plugins/anime');
+const { handleCommand } = require('../commands');
 
 async function messageHandler(sock, { messages, type }) {
   if (type !== 'notify') return;
   const msg = messages[0];
   if (!msg?.message || msg.key.fromMe) return;
 
-  const from = msg.key.remoteJid;
-  const isGroup = from.endsWith('@g.us');
-  const sender = isGroup ? msg.key.participant : from;
+  const from      = msg.key.remoteJid;
+  const isGroup   = from.endsWith('@g.us');
+  const sender    = isGroup ? msg.key.participant : from;
   const senderNumber = sender?.split('@')[0];
   const botNumber = jidNormalizedUser(sock.user.id);
-  const prefix = config.PREFIX;
+  const prefix    = config.PREFIX;
 
   // Dérouler les messages éphémères / view-once / document-with-caption
   const rawMsg = msg.message?.ephemeralMessage?.message
@@ -37,25 +24,27 @@ async function messageHandler(sock, { messages, type }) {
     || msg.message;
 
   const mtype = getContentType(rawMsg);
-  const body = mtype === 'conversation' ? rawMsg.conversation
-    : mtype === 'imageMessage' ? rawMsg.imageMessage?.caption || ''
-    : mtype === 'videoMessage' ? rawMsg.videoMessage?.caption || ''
-    : mtype === 'extendedTextMessage' ? rawMsg.extendedTextMessage?.text || ''
-    : mtype === 'buttonsResponseMessage' ? rawMsg.buttonsResponseMessage?.selectedButtonId || ''
-    : mtype === 'listResponseMessage' ? rawMsg.listResponseMessage?.singleSelectReply?.selectedRowId || ''
+  const body = mtype === 'conversation'           ? rawMsg.conversation
+    : mtype === 'imageMessage'                    ? rawMsg.imageMessage?.caption || ''
+    : mtype === 'videoMessage'                    ? rawMsg.videoMessage?.caption || ''
+    : mtype === 'extendedTextMessage'             ? rawMsg.extendedTextMessage?.text || ''
+    : mtype === 'buttonsResponseMessage'          ? rawMsg.buttonsResponseMessage?.selectedButtonId || ''
+    : mtype === 'listResponseMessage'             ? rawMsg.listResponseMessage?.singleSelectReply?.selectedRowId || ''
+    : mtype === 'interactiveResponseMessage'      ? rawMsg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson || ''
+    : mtype === 'templateButtonReplyMessage'      ? rawMsg.templateButtonReplyMessage?.selectedId || ''
     : '';
 
   const isCmd = body.startsWith(prefix);
   if (!isCmd) return;
 
   const command = body.slice(prefix.length).trim().split(/ +/).shift().toLowerCase();
-  const args = body.trim().split(/ +/).slice(1);
-  const text = args.join(' ');
-  const quoted = rawMsg?.extendedTextMessage?.contextInfo?.quotedMessage;
+  const args    = body.trim().split(/ +/).slice(1);
+  const text    = args.join(' ');
+  const quoted  = rawMsg?.extendedTextMessage?.contextInfo?.quotedMessage;
 
   // Auto-typing
   if (config.AUTO_TYPING) {
-    try { await sock.sendPresenceUpdate('composing', from); } catch(e) {}
+    try { await sock.sendPresenceUpdate('composing', from); } catch (e) {}
   }
 
   // Helper pour répondre
@@ -70,49 +59,41 @@ async function messageHandler(sock, { messages, type }) {
     return sock.sendMessage(from, { image: { url }, caption }, { quoted: msg });
   };
 
-  const ctx = { sock, msg, from, sender, senderNumber, isGroup, args, text, quoted, reply, sendImage, command, prefix, botNumber, isOwner: isOwner(sender) };
+  const ctx = {
+    sock, msg, from, sender, senderNumber, isGroup,
+    args, text, quoted, reply, sendImage,
+    command, prefix, botNumber,
+    isOwner: isOwner(sender),
+  };
 
   try {
-    // MENU PRINCIPAL
+    // ── MENU PRINCIPAL ────────────────────────────────────────
     if (command === 'menu' || command === 'help') {
       return await sendMainMenu(ctx);
     }
 
-    // Distribuer aux plugins
-    if (await aiPlugin.handle(ctx)) return;
-    if (await groupPlugin.handle(ctx)) return;
-    if (await ownerPlugin.handle(ctx)) return;
-    if (await funPlugin.handle(ctx)) return;
-    if (await gamePlugin.handle(ctx)) return;
-    if (await soundPlugin.handle(ctx)) return;
-    if (await otherPlugin.handle(ctx)) return;
-    if (await downloadPlugin.handle(ctx)) return;
-    if (await mediaPlugin.handle(ctx)) return;
-    if (await searchPlugin.handle(ctx)) return;
-    if (await randomPlugin.handle(ctx)) return;
-    if (await animePlugin.handle(ctx)) return;
-
-    // Commande inconnue
-    await reply(`❌ Commande *${command}* introuvable.\nTape *${prefix}menu* pour voir les commandes.`);
+    // ── TOUTES LES COMMANDES (fichier commands.js) ────────────
+    const handled = await handleCommand(ctx);
+    if (handled === false) {
+      await reply(`❌ Commande *${command}* introuvable.\nTape *${prefix}menu* pour voir les commandes.`);
+    }
   } catch (err) {
     console.error(`[CMD:${command}] Erreur:`, err.message);
-    await reply(`⚠️ Erreur lors de l'exécution de la commande *${command}*.\n_${err.message}_`);
+    await reply(`⚠️ Erreur lors de *${command}*.\n_${err.message}_`);
   } finally {
     if (config.AUTO_TYPING) {
-      try { await sock.sendPresenceUpdate('paused', from); } catch(e) {}
+      try { await sock.sendPresenceUpdate('paused', from); } catch (e) {}
     }
   }
 }
 
 async function sendMainMenu(ctx) {
-  const { sock, from, msg, reply } = ctx;
+  const { sock, from, msg } = ctx;
   const totalCmds = await countCommands();
-  const now = new Date();
 
   const menuText = `
 ╔══════════════════════╗
 ║  *DENTSU MD V7*  
-║  
 ╚══════════════════════╝
 
 ┌─────────────────────────
