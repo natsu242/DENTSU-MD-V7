@@ -86,29 +86,228 @@ async function getRandomImage(category) {
 
 // ─── TEXTES DES MENUS ────────────────────────────────────────────
 const MENUS = {
-  aimenu: `╔══════════════════════╗\n║    🧠 *AI MENU*      ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}ai [question]\n│ ${config.PREFIX}gpt [question]\n│ ${config.PREFIX}gemini [question]\n│ ${config.PREFIX}deepseek [question]\n│ ${config.PREFIX}grok-ai [question]\n│ ${config.PREFIX}codeai [code]\n│ ${config.PREFIX}storyai [thème]\n│ ${config.PREFIX}triviaai\n│ ${config.PREFIX}photoai [description]\n\n${config.BOT_FOOTER}`,
+  aimenu: `┏━━━━━━[ 🧠 *AI MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}ai [question]
+┃  ▸ ${config.PREFIX}gpt [question]
+┃  ▸ ${config.PREFIX}gemini [question]
+┃  ▸ ${config.PREFIX}deepseek [question]
+┃  ▸ ${config.PREFIX}grok-ai [question]
+┃  ▸ ${config.PREFIX}codeai [code]
+┃  ▸ ${config.PREFIX}storyai [thème]
+┃  ▸ ${config.PREFIX}triviaai
+┃  ▸ ${config.PREFIX}photoai [description]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  groupmenu: `╔══════════════════════╗\n║   👥 *GROUP MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}tagall [msg]\n│ ${config.PREFIX}hidetag [msg]\n│ ${config.PREFIX}promote @user\n│ ${config.PREFIX}demote @user\n│ ${config.PREFIX}kick @user\n│ ${config.PREFIX}add numéro\n│ ${config.PREFIX}mute / ${config.PREFIX}unmute\n│ ${config.PREFIX}grouplink\n│ ${config.PREFIX}resetlink\n│ ${config.PREFIX}kickall\n│ ${config.PREFIX}listadmins\n│ ${config.PREFIX}groupinfo\n│ ${config.PREFIX}subject [nom]\n│ ${config.PREFIX}desc [description]\n│ ${config.PREFIX}left\n│ ${config.PREFIX}join [lien]\n│ ${config.PREFIX}poll Question | Op1 | Op2\n│ ${config.PREFIX}warn @user\n│ ${config.PREFIX}lock / ${config.PREFIX}unlock\n│ ${config.PREFIX}creategroup [nom]\n\n${config.BOT_FOOTER}`,
+  groupmenu: `┏━━━━━━[ 👥 *GROUPE MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}tagall [msg]
+┃  ▸ ${config.PREFIX}hidetag [msg]
+┃  ▸ ${config.PREFIX}promote @user
+┃  ▸ ${config.PREFIX}demote @user
+┃  ▸ ${config.PREFIX}kick @user
+┃  ▸ ${config.PREFIX}add numéro
+┃  ▸ ${config.PREFIX}mute / ${config.PREFIX}unmute
+┃  ▸ ${config.PREFIX}grouplink
+┃  ▸ ${config.PREFIX}resetlink
+┃  ▸ ${config.PREFIX}kickall
+┃  ▸ ${config.PREFIX}listadmins
+┃  ▸ ${config.PREFIX}groupinfo
+┃  ▸ ${config.PREFIX}subject [nom]
+┃  ▸ ${config.PREFIX}desc [description]
+┃  ▸ ${config.PREFIX}left
+┃  ▸ ${config.PREFIX}join [lien]
+┃  ▸ ${config.PREFIX}poll Question | Op1 | Op2
+┃  ▸ ${config.PREFIX}warn @user
+┃  ▸ ${config.PREFIX}lock / ${config.PREFIX}unlock
+┃  ▸ ${config.PREFIX}creategroup [nom]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  ownermenu: `╔══════════════════════╗\n║   👑 *OWNER MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}ping\n│ ${config.PREFIX}alive\n│ ${config.PREFIX}mode public/self\n│ ${config.PREFIX}block @user\n│ ${config.PREFIX}unblock @user\n│ ${config.PREFIX}broadcast [msg]\n│ ${config.PREFIX}addsudo @user\n│ ${config.PREFIX}delsudo @user\n│ ${config.PREFIX}listsudo\n│ ${config.PREFIX}listgc\n│ ${config.PREFIX}leaveall\n│ ${config.PREFIX}del (reply)\n│ ${config.PREFIX}autoviewstatus on/off\n│ ${config.PREFIX}autotyping on/off\n│ ${config.PREFIX}autorecording on/off\n│ ${config.PREFIX}setbio [texte]\n│ ${config.PREFIX}setname [nom]\n\n${config.BOT_FOOTER}`,
+  ownermenu: `┏━━━━━━[ 👑 *OWNER MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}ping
+┃  ▸ ${config.PREFIX}alive
+┃  ▸ ${config.PREFIX}mode public/self
+┃  ▸ ${config.PREFIX}block @user
+┃  ▸ ${config.PREFIX}unblock @user
+┃  ▸ ${config.PREFIX}broadcast [msg]
+┃  ▸ ${config.PREFIX}addsudo @user
+┃  ▸ ${config.PREFIX}delsudo @user
+┃  ▸ ${config.PREFIX}listsudo
+┃  ▸ ${config.PREFIX}listgc
+┃  ▸ ${config.PREFIX}leaveall
+┃  ▸ ${config.PREFIX}del (reply)
+┃  ▸ ${config.PREFIX}autoviewstatus on/off
+┃  ▸ ${config.PREFIX}autotyping on/off
+┃  ▸ ${config.PREFIX}autorecording on/off
+┃  ▸ ${config.PREFIX}setbio [texte]
+┃  ▸ ${config.PREFIX}setname [nom]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  funmenu: `╔══════════════════════╗\n║    🎉 *FUN MENU*     ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}truth\n│ ${config.PREFIX}dare\n│ ${config.PREFIX}joke\n│ ${config.PREFIX}ship @user1 @user2\n│ ${config.PREFIX}rate [chose]\n│ ${config.PREFIX}flirt @user\n│ ${config.PREFIX}roast @user\n│ ${config.PREFIX}compliment @user\n│ ${config.PREFIX}wouldyou\n│ ${config.PREFIX}8ball [question]\n│ ${config.PREFIX}advice\n│ ${config.PREFIX}urban [mot]\n│ ${config.PREFIX}triviafact\n│ ${config.PREFIX}inspire\n│ ${config.PREFIX}ascii [texte]\n\n${config.BOT_FOOTER}`,
+  funmenu: `┏━━━━━━[ 🎉 *FUN MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}truth
+┃  ▸ ${config.PREFIX}dare
+┃  ▸ ${config.PREFIX}joke
+┃  ▸ ${config.PREFIX}ship @user1 @user2
+┃  ▸ ${config.PREFIX}rate [chose]
+┃  ▸ ${config.PREFIX}flirt @user
+┃  ▸ ${config.PREFIX}roast @user
+┃  ▸ ${config.PREFIX}compliment @user
+┃  ▸ ${config.PREFIX}wouldyou
+┃  ▸ ${config.PREFIX}8ball [question]
+┃  ▸ ${config.PREFIX}advice
+┃  ▸ ${config.PREFIX}urban [mot]
+┃  ▸ ${config.PREFIX}triviafact
+┃  ▸ ${config.PREFIX}inspire
+┃  ▸ ${config.PREFIX}ascii [texte]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  gamemenu: `╔══════════════════════╗\n║   🎮 *GAME MENU*     ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}rps [pierre/feuille/ciseaux]\n│ ${config.PREFIX}dice\n│ ${config.PREFIX}coin\n│ ${config.PREFIX}coinbattle @user\n│ ${config.PREFIX}numberbattle @user\n│ ${config.PREFIX}hangman\n│ ${config.PREFIX}lettre [lettre]\n│ ${config.PREFIX}guess\n│ ${config.PREFIX}g [nombre]\n│ ${config.PREFIX}math\n│ ${config.PREFIX}rep [réponse]\n│ ${config.PREFIX}emojiquiz\n│ ${config.PREFIX}ans [réponse]\n\n${config.BOT_FOOTER}`,
+  gamemenu: `┏━━━━━━[ 🎮 *GAME MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}rps [pierre/feuille/ciseaux]
+┃  ▸ ${config.PREFIX}dice
+┃  ▸ ${config.PREFIX}coin
+┃  ▸ ${config.PREFIX}coinbattle @user
+┃  ▸ ${config.PREFIX}numberbattle @user
+┃  ▸ ${config.PREFIX}hangman
+┃  ▸ ${config.PREFIX}lettre [lettre]
+┃  ▸ ${config.PREFIX}guess
+┃  ▸ ${config.PREFIX}g [nombre]
+┃  ▸ ${config.PREFIX}math
+┃  ▸ ${config.PREFIX}rep [réponse]
+┃  ▸ ${config.PREFIX}emojiquiz
+┃  ▸ ${config.PREFIX}ans [réponse]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  soundmenu: `╔══════════════════════╗\n║   🎵 *SOUND MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}tts [texte]\n│ ${config.PREFIX}say [texte]\n│ ${config.PREFIX}bass (reply audio)\n│ ${config.PREFIX}nightcore (reply audio)\n│ ${config.PREFIX}reverse (reply audio)\n│ ${config.PREFIX}robot (reply audio)\n│ ${config.PREFIX}slow (reply audio)\n│ ${config.PREFIX}fast (reply audio)\n\n⚠️ FFmpeg requis pour les effets audio\n\n${config.BOT_FOOTER}`,
+  soundmenu: `┏━━━━━━[ 🎵 *SOUND MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}tts [texte]
+┃  ▸ ${config.PREFIX}say [texte]
+┃  ▸ ${config.PREFIX}bass (reply audio)
+┃  ▸ ${config.PREFIX}nightcore (reply audio)
+┃  ▸ ${config.PREFIX}reverse (reply audio)
+┃  ▸ ${config.PREFIX}robot (reply audio)
+┃  ▸ ${config.PREFIX}slow (reply audio)
+┃  ▸ ${config.PREFIX}fast (reply audio)
+┃
+┃  ⚠️ FFmpeg requis pour effets audio
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  othermenu: `╔══════════════════════╗\n║   🔧 *OTHER MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}weather [ville]\n│ ${config.PREFIX}wiki [recherche]\n│ ${config.PREFIX}currency [montant] [de] [vers]\n│ ${config.PREFIX}time [ville]\n│ ${config.PREFIX}qrcode [texte]\n│ ${config.PREFIX}shorturl [url]\n│ ${config.PREFIX}myip\n│ ${config.PREFIX}jid\n│ ${config.PREFIX}github [username]\n│ ${config.PREFIX}npm [package]\n│ ${config.PREFIX}imdb [film]\n│ ${config.PREFIX}dictionary [mot]\n│ ${config.PREFIX}recipe [plat]\n│ ${config.PREFIX}remind [minutes] [message]\n│ ${config.PREFIX}calculate [calcul]\n│ ${config.PREFIX}mathfact [nombre]\n│ ${config.PREFIX}sciencefact\n│ ${config.PREFIX}horoscope [signe]\n│ ${config.PREFIX}password [longueur]\n\n${config.BOT_FOOTER}`,
+  othermenu: `┏━━━━━━[ 🔧 *OTHER MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}weather [ville]
+┃  ▸ ${config.PREFIX}wiki [recherche]
+┃  ▸ ${config.PREFIX}currency [montant] [de] [vers]
+┃  ▸ ${config.PREFIX}time [ville]
+┃  ▸ ${config.PREFIX}qrcode [texte]
+┃  ▸ ${config.PREFIX}shorturl [url]
+┃  ▸ ${config.PREFIX}myip
+┃  ▸ ${config.PREFIX}jid
+┃  ▸ ${config.PREFIX}github [username]
+┃  ▸ ${config.PREFIX}npm [package]
+┃  ▸ ${config.PREFIX}imdb [film]
+┃  ▸ ${config.PREFIX}dictionary [mot]
+┃  ▸ ${config.PREFIX}recipe [plat]
+┃  ▸ ${config.PREFIX}remind [minutes] [message]
+┃  ▸ ${config.PREFIX}calculate [calcul]
+┃  ▸ ${config.PREFIX}mathfact [nombre]
+┃  ▸ ${config.PREFIX}sciencefact
+┃  ▸ ${config.PREFIX}horoscope [signe]
+┃  ▸ ${config.PREFIX}password [longueur]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  dlmenu: `╔══════════════════════╗\n║  📥 *DOWNLOADER*     ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}ytmp3 [url/titre]\n│ ${config.PREFIX}ytb [url]\n│ ${config.PREFIX}song [titre]\n│ ${config.PREFIX}play [titre]\n│ ${config.PREFIX}mp4 [url]\n│ ${config.PREFIX}fb [url]\n│ ${config.PREFIX}insta [url]\n│ ${config.PREFIX}pint [url]\n│ ${config.PREFIX}apk [nom app]\n│ ${config.PREFIX}git [user/repo]\n\n${config.BOT_FOOTER}`,
+  dlmenu: `┏━━━━━━[ 📥 *DOWNLOADER* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}ytmp3 [url/titre]
+┃  ▸ ${config.PREFIX}ytb [url]
+┃  ▸ ${config.PREFIX}song [titre]
+┃  ▸ ${config.PREFIX}play [titre]
+┃  ▸ ${config.PREFIX}mp4 [url]
+┃  ▸ ${config.PREFIX}fb [url]
+┃  ▸ ${config.PREFIX}insta [url]
+┃  ▸ ${config.PREFIX}pint [url]
+┃  ▸ ${config.PREFIX}apk [nom app]
+┃  ▸ ${config.PREFIX}git [user/repo]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  mediamenu: `╔══════════════════════╗\n║   📸 *MEDIA MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}sticker (reply image/vidéo)\n│ ${config.PREFIX}s (reply image/vidéo)\n│ ${config.PREFIX}sticker2img (reply sticker)\n│ ${config.PREFIX}toimage (reply sticker)\n│ ${config.PREFIX}remini (reply image)\n│ ${config.PREFIX}imageinfo (reply image)\n│ ${config.PREFIX}qrcode [texte]\n\n${config.BOT_FOOTER}`,
+  mediamenu: `┏━━━━━━[ 📸 *MEDIA MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}sticker (reply image/vidéo)
+┃  ▸ ${config.PREFIX}s (reply image/vidéo)
+┃  ▸ ${config.PREFIX}sticker2img (reply sticker)
+┃  ▸ ${config.PREFIX}toimage (reply sticker)
+┃  ▸ ${config.PREFIX}remini (reply image)
+┃  ▸ ${config.PREFIX}imageinfo (reply image)
+┃  ▸ ${config.PREFIX}qrcode [texte]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  searchmenu: `╔══════════════════════╗\n║  🔍 *SEARCH MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}img [recherche]\n│ ${config.PREFIX}yts [titre]\n│ ${config.PREFIX}iplookup [ip]\n│ ${config.PREFIX}circle [url image]\n│ ${config.PREFIX}get [url]\n│ ${config.PREFIX}currency [montant] [de] [vers]\n│ ${config.PREFIX}time [ville]\n│ ${config.PREFIX}ffstalk [uid FF]\n│ ${config.PREFIX}npmstalk [package]\n\n${config.BOT_FOOTER}`,
+  searchmenu: `┏━━━━━━[ 🔍 *SEARCH MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}img [recherche]
+┃  ▸ ${config.PREFIX}yts [titre]
+┃  ▸ ${config.PREFIX}iplookup [ip]
+┃  ▸ ${config.PREFIX}circle [url image]
+┃  ▸ ${config.PREFIX}get [url]
+┃  ▸ ${config.PREFIX}currency [montant] [de] [vers]
+┃  ▸ ${config.PREFIX}time [ville]
+┃  ▸ ${config.PREFIX}ffstalk [uid FF]
+┃  ▸ ${config.PREFIX}npmstalk [package]
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  randommenu: `╔══════════════════════╗\n║  🖼️ *RANDOM IMAGE*   ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}hentai (18+)\n│ ${config.PREFIX}chinagirl\n│ ${config.PREFIX}bluearchive\n│ ${config.PREFIX}boypic\n│ ${config.PREFIX}carimage\n│ ${config.PREFIX}random-girl\n│ ${config.PREFIX}hijab-girl\n│ ${config.PREFIX}indonesia-girl\n│ ${config.PREFIX}japan-girl\n│ ${config.PREFIX}korean-girl\n\n${config.BOT_FOOTER}`,
+  randommenu: `┏━━━━━━[ 🖼️ *RANDOM IMAGE* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}chinagirl
+┃  ▸ ${config.PREFIX}bluearchive
+┃  ▸ ${config.PREFIX}boypic
+┃  ▸ ${config.PREFIX}carimage
+┃  ▸ ${config.PREFIX}random-girl
+┃  ▸ ${config.PREFIX}hijab-girl
+┃  ▸ ${config.PREFIX}indonesia-girl
+┃  ▸ ${config.PREFIX}japan-girl
+┃  ▸ ${config.PREFIX}korean-girl
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 
-  animemenu: `╔══════════════════════╗\n║   🎌 *ANIME MENU*    ║\n╚══════════════════════╝\n\n│ ${config.PREFIX}achar [personnage]\n│ ${config.PREFIX}aquote\n│ ${config.PREFIX}arecommend\n│ ${config.PREFIX}asearch [anime]\n│ ${config.PREFIX}anime [nom]\n│ ${config.PREFIX}manga [nom]\n│ ${config.PREFIX}lyrics [chanson]\n│ ${config.PREFIX}loli\n│ ${config.PREFIX}maid\n│ ${config.PREFIX}neko\n│ ${config.PREFIX}waifu\n│ ${config.PREFIX}shinobu\n│ ${config.PREFIX}megumin\n\n${config.BOT_FOOTER}`,
+  animemenu: `┏━━━━━━[ 🎌 *ANIME MENU* ]━━━━━━┓
+┃
+┃  ▸ ${config.PREFIX}achar [personnage]
+┃  ▸ ${config.PREFIX}aquote
+┃  ▸ ${config.PREFIX}arecommend
+┃  ▸ ${config.PREFIX}asearch [anime]
+┃  ▸ ${config.PREFIX}anime [nom]
+┃  ▸ ${config.PREFIX}manga [nom]
+┃  ▸ ${config.PREFIX}lyrics [chanson]
+┃  ▸ ${config.PREFIX}loli
+┃  ▸ ${config.PREFIX}maid
+┃  ▸ ${config.PREFIX}neko
+┃  ▸ ${config.PREFIX}waifu
+┃  ▸ ${config.PREFIX}shinobu
+┃  ▸ ${config.PREFIX}megumin
+┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+${config.BOT_FOOTER}`,
 };
 
 // ─── DONNÉES STATIQUES ───────────────────────────────────────────
