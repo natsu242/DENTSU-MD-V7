@@ -30,6 +30,135 @@ body {
   pointer-events: none;
 }
 
+/* ═══ OVERLAY SÉLECTION DE LANGUE ═══ */
+.lang-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.lang-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px 32px;
+  text-align: center;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: 0 8px 60px rgba(0,0,0,0.6);
+}
+
+.lang-bot-image {
+  width: 90px; height: 90px;
+  border-radius: 50%;
+  border: 3px solid var(--green);
+  object-fit: cover;
+  margin-bottom: 14px;
+  box-shadow: 0 0 24px rgba(0,230,118,0.3);
+}
+
+.lang-title {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--green);
+  text-shadow: 0 0 20px rgba(0,230,118,0.4);
+  margin-bottom: 4px;
+}
+
+.lang-subtitle {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 28px;
+}
+
+.lang-choose {
+  color: var(--text);
+  font-size: 0.95rem;
+  margin-bottom: 20px;
+  opacity: 0.85;
+}
+
+.lang-buttons {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
+
+.lang-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 28px;
+  background: rgba(0,230,118,0.08);
+  border: 1px solid rgba(0,230,118,0.25);
+  border-radius: 14px;
+  color: var(--text);
+  font-size: 2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 110px;
+}
+
+.lang-btn span {
+  font-size: 0.88rem;
+  color: var(--green);
+  font-weight: 600;
+}
+
+.lang-btn:hover {
+  background: rgba(0,230,118,0.18);
+  border-color: var(--green);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0,230,118,0.2);
+}
+
+/* ═══ SWITCHER DE LANGUE (dans la page) ═══ */
+.lang-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.lang-switch-btn {
+  background: transparent;
+  border: 1px solid rgba(0,230,118,0.2);
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+  width: auto;
+}
+
+.lang-switch-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+  transform: none;
+  box-shadow: none;
+}
+
+.lang-switch-btn.active-lang {
+  background: rgba(0,230,118,0.12);
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: 600;
+}
+
+.lang-sep {
+  color: var(--border);
+  font-size: 0.75rem;
+}
+
+/* ═══ CONTAINER ═══ */
 .container {
   width: 100%;
   max-width: 480px;
@@ -228,10 +357,13 @@ button[type="submit"]:disabled {
   cursor: pointer;
   font-size: 0.9rem;
   transition: all 0.2s;
+  width: auto;
 }
 
 .copy-btn:hover {
   background: rgba(0,230,118,0.25);
+  transform: none;
+  box-shadow: none;
 }
 
 /* Étapes */
@@ -323,4 +455,5 @@ button[type="submit"]:disabled {
 @media (max-width: 480px) {
   .card { padding: 20px; }
   .code-value { font-size: 1.6rem; letter-spacing: 4px; }
+  .lang-btn { padding: 14px 20px; min-width: 90px; }
 }
