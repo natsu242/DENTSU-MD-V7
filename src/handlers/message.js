@@ -16,26 +16,32 @@ async function messageHandler(sock, { messages, type }) {
   // Sécurité : sock.user peut être null pendant la phase de connexion
   if (!sock.user) return;
 
-  const from        = msg.key.remoteJid;
+  const from = msg.key.remoteJid;
   if (!from) return;
 
-  const isGroup     = from.endsWith('@g.us');
-  const sender      = isGroup
-    ? (msg.key.participant || msg.key.fromMe ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : from)
-    : from;
-  const senderNumber = sender?.split('@')[0];
-  const botJid      = jidNormalizedUser(sock.user.id);
-  const botNumber   = sock.user.id.split(':')[0];
+  const isGroup    = from.endsWith('@g.us');
+  const botJid     = jidNormalizedUser(sock.user.id);
+  const botNumber  = sock.user.id.split(':')[0];
+  const botFullJid = botNumber + '@s.whatsapp.net';
 
-  // Bloquer seulement les messages envoyés par le BOT lui-même (réponses automatiques)
-  // mais permettre les messages de l'owner depuis son propre numéro (fromMe = true)
-  if (msg.key.fromMe) {
-    // Si c'est le bot qui répond à quelqu'un d'autre, on ignore (évite les boucles)
-    // On laisse passer uniquement si c'est le bot messagant son propre chat (test owner)
-    const ownerJid = config.OWNER_NUMBER + '@s.whatsapp.net';
-    // Si from n'est pas le numéro owner, c'est le bot qui répond → ignorer
-    if (from !== ownerJid) return;
-  }
+  // Calcul correct du sender :
+  // - groupe + fromMe  → c'est le bot qui écrit → JID du bot
+  // - groupe + fromMe  → normalement ignoré (voir filtre bas), mais on calcule quand même
+  // - groupe + pas fromMe → msg.key.participant = vrai expéditeur
+  // - privé + fromMe   → c'est l'owner qui écrit depuis son téléphone
+  // - privé + pas fromMe → from = expéditeur
+  const sender = isGroup
+    ? (msg.key.fromMe ? botFullJid : (msg.key.participant || from))
+    : (msg.key.fromMe ? botFullJid : from);
+
+  const senderNumber = sender?.split('@')[0];
+
+  // ── Bloquer les réponses automatiques du bot (éviter les boucles)
+  // On autorise fromMe UNIQUEMENT si c'est l'owner/bot qui tape une commande.
+  // Les réponses automatiques du bot ne commencent pas par un préfixe,
+  // donc elles seront naturellement ignorées lors de la détection de commande.
+  // On bloque seulement les messages STATUS/système hors chat
+  if (from === 'status@broadcast') return;
 
   // ── Dérouler les messages éphémères / view-once / document-with-caption ──
   const rawMsg = msg.message?.ephemeralMessage?.message
@@ -192,7 +198,6 @@ async function sendMainMenu(ctx) {
 💡 .menu  !menu  /menu  menu — tous fonctionnent
 ${config.BOT_FOOTER}`;
 
-  // Envoyer texte seul (plus fiable que l'image pour le menu)
   return sock.sendMessage(from, {
     text: menuText,
     mentions: [sender],
