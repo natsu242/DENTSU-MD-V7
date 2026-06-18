@@ -1,24 +1,21 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
 const path = require('path');
-const morgan = require('morgan');
 const { startSession } = require('./bot');
 const store = require('./lib/store');
 const config = require('./config');
-const { generateOTP } = require('./lib/utils');
 
 const app = express();
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../website/views'));
 app.use(express.static(path.join(__dirname, '../website/public')));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(cors());
-app.use(morgan('dev'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ── Page principale (pairing) ──────────────────────────────────────
+// Garder les requêtes de pairing en cours (éviter les doublons)
+const pendingPairs = new Set();
+
+// ── Page principale ────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.render('index', {
     botName: config.BOT_NAME,
@@ -35,68 +32,83 @@ app.get('/', (req, res) => {
 
 // ── Demander un code de jumelage ───────────────────────────────────
 app.post('/pair', async (req, res) => {
-  const { number } = req.body;
+  let { number } = req.body;
   if (!number) return res.json({ success: false, error: 'Numéro requis' });
 
+  // Nettoyer le numéro (garder que les chiffres)
   const sanitized = number.replace(/[^0-9]/g, '');
-  if (sanitized.length < 8) return res.json({ success: false, error: 'Numéro invalide' });
+
+  if (sanitized.length < 7 || sanitized.length > 15) {
+    return res.json({ success: false, error: 'Numéro invalide. Exemple: 242065121108' });
+  }
 
   if (store.sessionCount() >= config.MAX_SESSIONS) {
     return res.json({ success: false, error: `Limite de ${config.MAX_SESSIONS} sessions atteinte` });
   }
 
   const existing = store.getSession(sanitized);
-  if (existing) return res.json({ success: false, error: 'Ce numéro est déjà connecté!' });
+  if (existing) {
+    return res.json({ success: false, error: 'Ce numéro est déjà connecté au bot!' });
+  }
+
+  if (pendingPairs.has(sanitized)) {
+    return res.json({ success: false, error: 'Une demande est déjà en cours pour ce numéro. Attends 30 secondes.' });
+  }
+
+  pendingPairs.add(sanitized);
 
   try {
-    const { sock, code } = await startSession(sanitized);
+    const { code } = await startSession(sanitized);
+
     if (code) {
-      return res.json({ success: true, code, message: 'Entre ce code dans WhatsApp → Appareils liés → Lier un appareil → Code de jumelage' });
+      // Retirer de la liste pending après 60s (timeout)
+      setTimeout(() => pendingPairs.delete(sanitized), 60000);
+      return res.json({
+        success: true,
+        code,
+        message: `Entre ce code dans WhatsApp :\nParamètres → Appareils liés → Lier un appareil → Code de jumelage`,
+      });
     }
-    return res.json({ success: true, code: null, message: 'Déjà connecté!' });
+
+    pendingPairs.delete(sanitized);
+    return res.json({ success: true, code: null, message: 'Numéro déjà connecté!' });
+
   } catch (err) {
-    console.error('Pair error:', err.message);
-    return res.json({ success: false, error: err.message });
+    pendingPairs.delete(sanitized);
+    console.error(`[WEB] Pair error ${sanitized}:`, err.message);
+
+    let errorMsg = err.message;
+    if (err.message.includes('timed out') || err.message.includes('timeout')) {
+      errorMsg = 'Timeout: Le numéro ne répond pas. Vérifie que WhatsApp est installé et actif sur ce numéro.';
+    } else if (err.message.includes('rate-limit') || err.message.includes('429')) {
+      errorMsg = 'Trop de demandes. Attends quelques minutes et réessaie.';
+    } else if (err.message.includes('not registered') || err.message.includes('404')) {
+      errorMsg = 'Ce numéro n\'est pas enregistré sur WhatsApp.';
+    }
+
+    return res.json({ success: false, error: errorMsg });
   }
 });
 
-// ── Status des sessions ────────────────────────────────────────────
+// ── Status ─────────────────────────────────────────────────────────
 app.get('/status', (req, res) => {
   const sessions = store.getAllSessions().map(([num]) => ({
-    number: num.replace(/(\d{3})(\d+)(\d{3})/, '$1***$3'),
+    number: num.slice(0, 3) + '***' + num.slice(-3),
     connected: true,
   }));
   res.json({ sessions, count: sessions.length, max: config.MAX_SESSIONS });
 });
 
-// ── Déconnecter une session ────────────────────────────────────────
-app.post('/disconnect', async (req, res) => {
-  const { number, ownerKey } = req.body;
-  if (ownerKey !== config.OWNER_NUMBER) return res.json({ success: false, error: 'Non autorisé' });
-  const sanitized = number?.replace(/[^0-9]/g, '');
-  if (!sanitized) return res.json({ success: false, error: 'Numéro requis' });
-  const sess = store.getSession(sanitized);
-  if (!sess) return res.json({ success: false, error: 'Session non trouvée' });
-  try {
-    await sess.sock.logout();
-    store.deleteSession(sanitized);
-    res.json({ success: true, message: `${sanitized} déconnecté` });
-  } catch(e) {
-    store.deleteSession(sanitized);
-    res.json({ success: true, message: `${sanitized} supprimé` });
-  }
-});
-
-// ── Healthcheck pour Render ────────────────────────────────────────
+// ── Healthcheck Render ─────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', bot: config.BOT_NAME, sessions: store.sessionCount(), uptime: process.uptime() });
+  res.json({ status: 'ok', bot: config.BOT_NAME, sessions: store.sessionCount(), uptime: Math.floor(process.uptime()) });
 });
 
 function startWebServer() {
-  const PORT = process.env.PORT || config.PORT;
+  const PORT = process.env.PORT || config.PORT || 3000;
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🌐 Site de couplage: http://localhost:${PORT}`);
-    console.log(`📱 Pour connecter: entre ton numéro sur le site web`);
+    console.log(`\n🌐 Site de couplage démarré sur le port ${PORT}`);
+    console.log(`📱 Ouvre le site et entre ton numéro WhatsApp pour obtenir le code\n`);
   });
 }
 
