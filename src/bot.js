@@ -17,18 +17,32 @@ const { setupStatusHandlers } = require('./handlers/status');
 
 const logger = pino({ level: 'silent' });
 
+// Version de secours si fetchLatestBaileysVersion échoue
+const FALLBACK_VERSION = [2, 3000, 1023596128];
+
+async function getVersion() {
+  try {
+    const { version } = await fetchLatestBaileysVersion();
+    return version;
+  } catch (e) {
+    console.log('[BOT] fetchLatestBaileysVersion a échoué, utilisation de la version de secours');
+    return FALLBACK_VERSION;
+  }
+}
+
+function getBrowserValue() {
+  if (typeof Browsers?.macOS === 'function') return Browsers.macOS('Safari');
+  if (Array.isArray(Browsers?.macOS)) return Browsers.macOS;
+  return ['Ubuntu', 'Chrome', '22.0.0'];
+}
+
 async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
   fs.ensureDirSync(sessionPath);
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-  const { version } = await fetchLatestBaileysVersion();
-
-  // Browsers.macOS est un tableau dans @trashcore/baileys — ne pas appeler comme fonction
-  const browserValue = typeof Browsers.macOS === 'function'
-    ? Browsers.macOS('Safari')
-    : Browsers.macOS;
+  const version = await getVersion();
 
   const sock = makeWASocket({
     version,
@@ -38,7 +52,7 @@ async function startSession(number) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    browser: browserValue,
+    browser: getBrowserValue(),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 25000,
@@ -94,15 +108,21 @@ async function startSession(number) {
 
   // ── Demander le code de jumelage si pas encore couplé ────────────────────
   if (!sock.authState.creds.registered) {
-    await delay(1500);
+    // Attendre que la connexion WebSocket soit prête (3s plus fiable que 1.5s)
+    await delay(3000);
     try {
+      console.log(`[${sanitized}] Demande du code de jumelage...`);
       const code          = await sock.requestPairingCode(sanitized);
       const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
       console.log(`[${sanitized}] Code de jumelage: ${formattedCode}`);
       return { sock, code: formattedCode };
     } catch (err) {
-      console.error(`[${sanitized}] Erreur pairing code:`, err.message);
-      throw new Error('Impossible de générer le code. Vérifie que le numéro est sur WhatsApp.');
+      // Logguer l'erreur réelle pour debug
+      const realError = err?.message || String(err);
+      console.error(`[${sanitized}] Erreur requestPairingCode:`, realError);
+      // Fermer proprement le socket avant de relancer
+      try { sock.end(); } catch (_) {}
+      throw new Error(`Échec du code de jumelage: ${realError}`);
     }
   }
 
