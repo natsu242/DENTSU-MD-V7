@@ -4,7 +4,6 @@ const {
   DisconnectReason,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
-  Browsers,
   delay,
 } = require('baileys');
 const pino = require('pino');
@@ -33,7 +32,7 @@ async function startSession(number) {
       creds: state.creds,
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
-    browser: Browsers.macOS('Safari'),
+    browser: ['Mac OS X', 'Safari', '605.1.15'],
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 25000,
