@@ -11,12 +11,17 @@ const sudoList    = new Set();
 const blocklist   = new Set();
 const warnStore   = new Map();
 
-// ─── HELPER : envoyer menu (texte uniquement — plus fiable) ──────
+// ─── HELPER : envoyer menu avec image Natsu ─────────────────────
 async function sendMenu(sock, from, msg, caption) {
   try {
-    await sock.sendMessage(from, { text: caption }, { quoted: msg });
+    await sock.sendMessage(from, {
+      image: { url: config.MENU_IMAGE },
+      caption,
+    }, { quoted: msg });
   } catch (e) {
-    console.error('[sendMenu] Erreur:', e.message);
+    // Fallback texte si l'image échoue
+    try { await sock.sendMessage(from, { text: caption }, { quoted: msg }); }
+    catch (e2) { console.error('[sendMenu] Erreur:', e2.message); }
   }
 }
 
