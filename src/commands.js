@@ -1,1715 +1,1140 @@
 const config = require('./config');
 const axios = require('axios');
-const { delay, getContentType, downloadMediaMessage } = require('baileys');
+const { downloadMediaMessage } = require('baileys');
 const store = require('./lib/store');
+const { exec } = require('child_process');
+const fs = require('fs-extra');
+const path = require('path');
 
-// ─── ÉTAT DES JEUX ───────────────────────────────────────────────
-const activeGames = new Map();
-const mathGames   = new Map();
-const guessGames  = new Map();
-const sudoList    = new Set();
-const blocklist   = new Set();
-const warnStore   = new Map();
+// ─── State ────────────────────────────────────────────────────────
+const activeGames   = new Map();
+const hangmanGames  = new Map();
+const tttGames      = new Map();
+const sudoList      = new Set();
+const blocklist     = new Set();
+const warnStore     = new Map();
+const antiLinkGroups = new Set();
+const numberEmojis  = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
 
-// ─── HELPER : envoyer menu avec image Natsu ─────────────────────
-async function sendMenu(sock, from, msg, caption) {
-  try {
-    await sock.sendMessage(from, {
-      image: { url: config.MENU_IMAGE },
-      caption,
-    }, { quoted: msg });
-  } catch (e) {
-    // Fallback texte si l'image échoue
-    try { await sock.sendMessage(from, { text: caption }, { quoted: msg }); }
-    catch (e2) { console.error('[sendMenu] Erreur:', e2.message); }
-  }
-}
-
-// ─── HELPER : vérifier admin ─────────────────────────────────────
-async function isAdmin(sock, from, jid) {
-  try {
-    const meta = await sock.groupMetadata(from);
-    return meta.participants.find(p => p.id === jid)?.admin != null;
-  } catch (e) { return false; }
-}
-
+// ─── Helpers ─────────────────────────────────────────────────────
 async function isBotAdmin(sock, from) {
   try {
     const meta = await sock.groupMetadata(from);
     const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
     return meta.participants.find(p => p.id === botId)?.admin != null;
-  } catch (e) { return false; }
+  } catch { return false; }
+}
+
+async function isUserAdmin(sock, from, jid) {
+  try {
+    const meta = await sock.groupMetadata(from);
+    return meta.participants.find(p => p.id === jid)?.admin != null;
+  } catch { return false; }
 }
 
 function getMentioned(msg) {
-  return msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  return msg.message?.extendedTextMessage?.contextInfo?.mentionedJid
+    || msg.message?.imageMessage?.contextInfo?.mentionedJid
+    || [];
 }
 
-// ─── HELPER : appel IA ───────────────────────────────────────────
-async function callFreeAI(question) {
+function getRandom(ext = '') {
+  return `./tmp/${Date.now()}${Math.random().toString(36).slice(2)}${ext}`;
+}
+
+// ── GPT-4 via chateverywhere ──────────────────────────────────────
+async function callGPT4(prompt) {
+  const res = await axios.post('https://chateverywhere.app/api/chat/', {
+    model: { id: 'gpt-4', name: 'GPT-4', maxLength: 32000, tokenLimit: 8000, completionTokenLimit: 5000, deploymentName: 'gpt-4' },
+    messages: [{ pluginId: null, content: prompt, role: 'user' }],
+    prompt,
+    temperature: 0.5,
+  }, { headers: { Accept: '*/*', 'User-Agent': 'WhatsApp Bot' } });
+  return typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+}
+
+// ── EPHOTO helper ─────────────────────────────────────────────────
+async function ephoto(sock, from, msg, endpoint, label, inputText) {
+  if (!inputText) return sock.sendMessage(from, { text: `❌ Please provide text!\nExample: .${endpoint} Your Text` }, { quoted: msg });
+  const url = `https://apis.prexzyvilla.site/${endpoint}?text=${encodeURIComponent(inputText)}`;
   try {
-    const res = await axios.get(`https://api.simsimi.vip/v1/simtalk?text=${encodeURIComponent(question)}&lc=fr`);
-    return res.data?.success || 'Désolé, je ne peux pas répondre pour le moment.';
+    await sock.sendMessage(from, { image: { url }, caption: `${label} Generated for: *${inputText}*` }, { quoted: msg });
   } catch (e) {
-    try {
-      const res2 = await axios.get(`https://api.ryzendesu.vip/api/ai/chatgpt?text=${encodeURIComponent(question)}`);
-      return res2.data?.answer || res2.data?.response || 'Je ne peux pas répondre maintenant.';
-    } catch (e2) {
-      return '🤖 *IA temporairement indisponible*\nEssaie plus tard.';
-    }
+    await sock.sendMessage(from, { text: `⚠️ Error generating ${label}.\n_${e.message}_` }, { quoted: msg });
   }
 }
 
-// ─── HELPER : image aléatoire ────────────────────────────────────
-async function getRandomImage(category) {
-  const apis = {
-    'chinagirl':      ['https://api.ryzendesu.vip/api/img/china',  'https://api.waifu.pics/sfw/waifu'],
-    'hijab-girl':     ['https://api.ryzendesu.vip/api/img/hijab'],
-    'indonesia-girl': ['https://api.ryzendesu.vip/api/img/indo'],
-    'japan-girl':     ['https://api.ryzendesu.vip/api/img/japan',  'https://api.waifu.pics/sfw/waifu'],
-    'korean-girl':    ['https://api.ryzendesu.vip/api/img/korea'],
-    'carimage':       ['https://api.ryzendesu.vip/api/img/car'],
-    'boypic':         ['https://api.ryzendesu.vip/api/img/boy'],
-    'bluearchive':    ['https://api.waifu.pics/sfw/waifu'],
-    'random-girl':    ['https://api.waifu.pics/sfw/neko', 'https://api.waifu.pics/sfw/waifu'],
-  };
-  const urls = apis[category] || ['https://api.waifu.pics/sfw/waifu'];
-  for (const url of urls) {
-    try {
-      const res = await axios.get(url);
-      const imgUrl = res.data?.url || res.data?.image || res.data?.data?.url;
-      if (imgUrl) return imgUrl;
-    } catch (e) {}
+// ── GFX/LOGO helper ───────────────────────────────────────────────
+async function gfxLogo(sock, from, msg, style, text1, text2) {
+  if (!text1 || !text2) return sock.sendMessage(from, { text: `❌ Usage: .${style} text1|text2\nExample: .${style} DENTSU|MD` }, { quoted: msg });
+  const url = `https://api.nexoracle.com/image-creating/${style}?apikey=d0634e61e8789b051e&text1=${encodeURIComponent(text1)}&text2=${encodeURIComponent(text2)}`;
+  try {
+    await sock.sendMessage(from, { image: { url }, caption: `✨ *${style.toUpperCase()}* Style\n🔤 ${text1}\n🔡 ${text2}` }, { quoted: msg });
+  } catch (e) {
+    await sock.sendMessage(from, { text: `⚠️ Error generating ${style.toUpperCase()} image.\n_${e.message}_` }, { quoted: msg });
   }
-  return null;
 }
 
-// ─── TEXTES DES MENUS ────────────────────────────────────────────
-const MENUS = {
-  aimenu: `┏━━━━━━[ 🧠 *AI MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}ai [question]
-┃  ▸ ${config.PREFIX}gpt [question]
-┃  ▸ ${config.PREFIX}gemini [question]
-┃  ▸ ${config.PREFIX}deepseek [question]
-┃  ▸ ${config.PREFIX}grok-ai [question]
-┃  ▸ ${config.PREFIX}codeai [code]
-┃  ▸ ${config.PREFIX}storyai [thème]
-┃  ▸ ${config.PREFIX}triviaai
-┃  ▸ ${config.PREFIX}photoai [description]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  groupmenu: `┏━━━━━━[ 👥 *GROUPE MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}tagall [msg]
-┃  ▸ ${config.PREFIX}hidetag [msg]
-┃  ▸ ${config.PREFIX}promote @user
-┃  ▸ ${config.PREFIX}demote @user
-┃  ▸ ${config.PREFIX}kick @user
-┃  ▸ ${config.PREFIX}add numéro
-┃  ▸ ${config.PREFIX}mute / ${config.PREFIX}unmute
-┃  ▸ ${config.PREFIX}grouplink
-┃  ▸ ${config.PREFIX}resetlink
-┃  ▸ ${config.PREFIX}kickall
-┃  ▸ ${config.PREFIX}listadmins
-┃  ▸ ${config.PREFIX}groupinfo
-┃  ▸ ${config.PREFIX}subject [nom]
-┃  ▸ ${config.PREFIX}desc [description]
-┃  ▸ ${config.PREFIX}left
-┃  ▸ ${config.PREFIX}join [lien]
-┃  ▸ ${config.PREFIX}poll Question | Op1 | Op2
-┃  ▸ ${config.PREFIX}warn @user
-┃  ▸ ${config.PREFIX}lock / ${config.PREFIX}unlock
-┃  ▸ ${config.PREFIX}creategroup [nom]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  ownermenu: `┏━━━━━━[ 👑 *OWNER MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}ping
-┃  ▸ ${config.PREFIX}alive
-┃  ▸ ${config.PREFIX}mode public/self
-┃  ▸ ${config.PREFIX}block @user
-┃  ▸ ${config.PREFIX}unblock @user
-┃  ▸ ${config.PREFIX}broadcast [msg]
-┃  ▸ ${config.PREFIX}addsudo @user
-┃  ▸ ${config.PREFIX}delsudo @user
-┃  ▸ ${config.PREFIX}listsudo
-┃  ▸ ${config.PREFIX}listgc
-┃  ▸ ${config.PREFIX}leaveall
-┃  ▸ ${config.PREFIX}del (reply)
-┃  ▸ ${config.PREFIX}autoviewstatus on/off
-┃  ▸ ${config.PREFIX}autotyping on/off
-┃  ▸ ${config.PREFIX}autorecording on/off
-┃  ▸ ${config.PREFIX}setbio [texte]
-┃  ▸ ${config.PREFIX}setname [nom]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  funmenu: `┏━━━━━━[ 🎉 *FUN MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}truth
-┃  ▸ ${config.PREFIX}dare
-┃  ▸ ${config.PREFIX}joke
-┃  ▸ ${config.PREFIX}ship @user1 @user2
-┃  ▸ ${config.PREFIX}rate [chose]
-┃  ▸ ${config.PREFIX}flirt @user
-┃  ▸ ${config.PREFIX}roast @user
-┃  ▸ ${config.PREFIX}compliment @user
-┃  ▸ ${config.PREFIX}wouldyou
-┃  ▸ ${config.PREFIX}8ball [question]
-┃  ▸ ${config.PREFIX}advice
-┃  ▸ ${config.PREFIX}urban [mot]
-┃  ▸ ${config.PREFIX}triviafact
-┃  ▸ ${config.PREFIX}inspire
-┃  ▸ ${config.PREFIX}ascii [texte]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  gamemenu: `┏━━━━━━[ 🎮 *GAME MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}rps [pierre/feuille/ciseaux]
-┃  ▸ ${config.PREFIX}dice
-┃  ▸ ${config.PREFIX}coin
-┃  ▸ ${config.PREFIX}coinbattle @user
-┃  ▸ ${config.PREFIX}numberbattle @user
-┃  ▸ ${config.PREFIX}hangman
-┃  ▸ ${config.PREFIX}lettre [lettre]
-┃  ▸ ${config.PREFIX}guess
-┃  ▸ ${config.PREFIX}g [nombre]
-┃  ▸ ${config.PREFIX}math
-┃  ▸ ${config.PREFIX}rep [réponse]
-┃  ▸ ${config.PREFIX}emojiquiz
-┃  ▸ ${config.PREFIX}ans [réponse]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  soundmenu: `┏━━━━━━[ 🎵 *SOUND MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}tts [texte]
-┃  ▸ ${config.PREFIX}say [texte]
-┃  ▸ ${config.PREFIX}bass (reply audio)
-┃  ▸ ${config.PREFIX}nightcore (reply audio)
-┃  ▸ ${config.PREFIX}reverse (reply audio)
-┃  ▸ ${config.PREFIX}robot (reply audio)
-┃  ▸ ${config.PREFIX}slow (reply audio)
-┃  ▸ ${config.PREFIX}fast (reply audio)
-┃
-┃  ⚠️ FFmpeg requis pour effets audio
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  othermenu: `┏━━━━━━[ 🔧 *OTHER MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}weather [ville]
-┃  ▸ ${config.PREFIX}wiki [recherche]
-┃  ▸ ${config.PREFIX}currency [montant] [de] [vers]
-┃  ▸ ${config.PREFIX}time [ville]
-┃  ▸ ${config.PREFIX}qrcode [texte]
-┃  ▸ ${config.PREFIX}shorturl [url]
-┃  ▸ ${config.PREFIX}myip
-┃  ▸ ${config.PREFIX}jid
-┃  ▸ ${config.PREFIX}github [username]
-┃  ▸ ${config.PREFIX}npm [package]
-┃  ▸ ${config.PREFIX}imdb [film]
-┃  ▸ ${config.PREFIX}dictionary [mot]
-┃  ▸ ${config.PREFIX}recipe [plat]
-┃  ▸ ${config.PREFIX}remind [minutes] [message]
-┃  ▸ ${config.PREFIX}calculate [calcul]
-┃  ▸ ${config.PREFIX}mathfact [nombre]
-┃  ▸ ${config.PREFIX}sciencefact
-┃  ▸ ${config.PREFIX}horoscope [signe]
-┃  ▸ ${config.PREFIX}password [longueur]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  dlmenu: `┏━━━━━━[ 📥 *DOWNLOADER* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}ytmp3 [url/titre]
-┃  ▸ ${config.PREFIX}ytb [url]
-┃  ▸ ${config.PREFIX}song [titre]
-┃  ▸ ${config.PREFIX}play [titre]
-┃  ▸ ${config.PREFIX}mp4 [url]
-┃  ▸ ${config.PREFIX}fb [url]
-┃  ▸ ${config.PREFIX}insta [url]
-┃  ▸ ${config.PREFIX}pint [url]
-┃  ▸ ${config.PREFIX}apk [nom app]
-┃  ▸ ${config.PREFIX}git [user/repo]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  mediamenu: `┏━━━━━━[ 📸 *MEDIA MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}sticker (reply image/vidéo)
-┃  ▸ ${config.PREFIX}s (reply image/vidéo)
-┃  ▸ ${config.PREFIX}sticker2img (reply sticker)
-┃  ▸ ${config.PREFIX}toimage (reply sticker)
-┃  ▸ ${config.PREFIX}remini (reply image)
-┃  ▸ ${config.PREFIX}imageinfo (reply image)
-┃  ▸ ${config.PREFIX}qrcode [texte]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  searchmenu: `┏━━━━━━[ 🔍 *SEARCH MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}img [recherche]
-┃  ▸ ${config.PREFIX}yts [titre]
-┃  ▸ ${config.PREFIX}iplookup [ip]
-┃  ▸ ${config.PREFIX}circle [url image]
-┃  ▸ ${config.PREFIX}get [url]
-┃  ▸ ${config.PREFIX}currency [montant] [de] [vers]
-┃  ▸ ${config.PREFIX}time [ville]
-┃  ▸ ${config.PREFIX}ffstalk [uid FF]
-┃  ▸ ${config.PREFIX}npmstalk [package]
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  randommenu: `┏━━━━━━[ 🖼️ *RANDOM IMAGE* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}chinagirl
-┃  ▸ ${config.PREFIX}bluearchive
-┃  ▸ ${config.PREFIX}boypic
-┃  ▸ ${config.PREFIX}carimage
-┃  ▸ ${config.PREFIX}random-girl
-┃  ▸ ${config.PREFIX}hijab-girl
-┃  ▸ ${config.PREFIX}indonesia-girl
-┃  ▸ ${config.PREFIX}japan-girl
-┃  ▸ ${config.PREFIX}korean-girl
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-
-  animemenu: `┏━━━━━━[ 🎌 *ANIME MENU* ]━━━━━━┓
-┃
-┃  ▸ ${config.PREFIX}achar [personnage]
-┃  ▸ ${config.PREFIX}aquote
-┃  ▸ ${config.PREFIX}arecommend
-┃  ▸ ${config.PREFIX}asearch [anime]
-┃  ▸ ${config.PREFIX}anime [nom]
-┃  ▸ ${config.PREFIX}manga [nom]
-┃  ▸ ${config.PREFIX}lyrics [chanson]
-┃  ▸ ${config.PREFIX}loli
-┃  ▸ ${config.PREFIX}maid
-┃  ▸ ${config.PREFIX}neko
-┃  ▸ ${config.PREFIX}waifu
-┃  ▸ ${config.PREFIX}shinobu
-┃  ▸ ${config.PREFIX}megumin
-┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
-${config.BOT_FOOTER}`,
-};
-
-// ─── DONNÉES STATIQUES ───────────────────────────────────────────
-const truths = [
-  "Quelle est ta plus grande peur ?",
-  "Quel est ton secret le plus embarrassant ?",
-  "As-tu déjà menti à un ami proche ?",
-  "Quelle est la chose la plus stupide que tu aies faite ?",
-  "Qui est ton crush en ce moment ?",
-  "Quelle est ta plus grande faiblesse ?",
-  "Quel est ton plus grand regret ?",
-];
-const dares = [
-  "Envoie ton selfie le plus bizarre !",
-  "Chante une chanson et envoie l'audio !",
-  "Écris un poème en 2 minutes et envoie-le !",
-  "Imite un animal et envoie l'audio !",
-  "Envoie une blague nulle à 5 amis !",
-];
-const jokes = [
-  "Pourquoi les plongeurs plongent-ils toujours en arrière ? Parce que sinon ils tomberaient dans le bateau ! 😂",
-  "Qu'est-ce qu'un canif ? C'est le petit frère du canard ! 🦆",
-  "Pourquoi les squelettes ne se battent jamais ? Ils n'ont pas le cœur à ça ! 💀",
-  "Que dit un oignon quand il se baigne ? Oh! un bain! 🧅",
-  "Comment appelle-t-on un chat tombé dans un pot de peinture le jour de Noël ? Un chat-peint de Noël ! 🐱",
-];
-const quotes = [
-  "\"La vie est courte, souris pendant qu'il te reste des dents.\" - Inconnu",
-  "\"Le succès c'est aller d'échec en échec sans perdre son enthousiasme.\" - Churchill",
-  "\"L'imagination est plus importante que le savoir.\" - Einstein",
-  "\"La seule façon de faire du bon travail est d'aimer ce que tu fais.\" - Steve Jobs",
-];
-const flirts = [
-  "✨ Tu es si beau(belle) que même les étoiles te demandent ton secret !",
-  "💖 Si la beauté était un crime, tu serais condamné(e) à perpétuité !",
-  "🌹 Chaque fois que je te vois, je comprends pourquoi le soleil brille !",
-];
-const roasts = [
-  "😂 T'es tellement lent(e) que tu mettrais 2h à regarder 60 minutes !",
-  "🤣 Ton cerveau fonctionne comme un PC Windows 95 !",
-  "💀 Si la bêtise était douloureuse, tu crierais 24h/24 !",
-];
-const hangmanWords = ['javascript','python','elephant','ordinateur','programmation','whatsapp','internet','telephone','developpeur','application'];
-
-// ─── HANDLER PRINCIPAL ───────────────────────────────────────────
+// ─── MAIN HANDLER ────────────────────────────────────────────────
 async function handleCommand(ctx) {
-  const { command, text, reply, sock, from, msg, sender, senderNumber, isGroup, args, isOwner: ownerCheck } = ctx;
+  const { sock, msg, from, sender, isGroup, args, text, command, prefix, isOwner, reply, sendImage } = ctx;
+  const quoted = ctx.quoted;
+  const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
 
+  // Group metadata helpers
+  let groupMeta = null, participants = [], groupAdmins = false, isAdmin = false;
+  if (isGroup) {
+    try {
+      groupMeta = await sock.groupMetadata(from);
+      participants = groupMeta.participants;
+      groupAdmins = participants.find(p => p.id === botId)?.admin != null;
+      isAdmin = participants.find(p => p.id === sender)?.admin != null;
+    } catch (_) {}
+  }
+
+  const sendMsg = (text) => sock.sendMessage(from, { text }, { quoted: msg });
+
+  // ════════════════════════════════════════════════════════════════
+  // 👑 OWNER COMMANDS
+  // ════════════════════════════════════════════════════════════════
   switch (command) {
 
-    // ════════════════════════════════════════════════════════════
-    //  📋  SOUS-MENUS (tous en case explicite)
-    // ════════════════════════════════════════════════════════════
-    case 'aimenu': {
-      return sendMenu(sock, from, msg, MENUS.aimenu);
-    }
+  case 'ping':
+  case 'speed': {
+    const t = Date.now();
+    await reply(`🏓 DENTSU MD V7 — *${Date.now() - t} ms*`);
+    return true;
+  }
 
-    case 'groupmenu': {
-      return sendMenu(sock, from, msg, MENUS.groupmenu);
-    }
+  case 'alive':
+  case 'runtime': {
+    const uptime = process.uptime();
+    const h = Math.floor(uptime / 3600), m = Math.floor((uptime % 3600) / 60), s = Math.floor(uptime % 60);
+    await reply(`✅ *DENTSU MD V7* is alive!\n⏱️ Uptime: *${h}h ${m}m ${s}s*`);
+    return true;
+  }
 
-    case 'ownermenu': {
-      return sendMenu(sock, from, msg, MENUS.ownermenu);
-    }
+  case 'jid':
+    await reply(`📌 Chat JID: \`${from}\`\n👤 Your JID: \`${sender}\``);
+    return true;
 
-    case 'funmenu': {
-      return sendMenu(sock, from, msg, MENUS.funmenu);
-    }
+  case 'public': {
+    if (!isOwner) return reply('❌ Owner only.');
+    config.MODE = 'public';
+    await reply('✅ DENTSU MD V7 is now *Public Mode*.');
+    return true;
+  }
 
-    case 'gamemenu': {
-      return sendMenu(sock, from, msg, MENUS.gamemenu);
-    }
+  case 'self':
+  case 'private': {
+    if (!isOwner) return reply('❌ Owner only.');
+    config.MODE = 'self';
+    await reply('🔒 DENTSU MD V7 is now *Self Mode*.');
+    return true;
+  }
 
-    case 'soundmenu': {
-      return sendMenu(sock, from, msg, MENUS.soundmenu);
-    }
+  case 'block':
+  case 'blocked': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const mentioned = getMentioned(msg);
+    const target = mentioned[0] || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    await sock.updateBlockStatus(target, 'block');
+    await reply('✅ User blocked.');
+    return true;
+  }
 
-    case 'othermenu': {
-      return sendMenu(sock, from, msg, MENUS.othermenu);
-    }
+  case 'unblock':
+  case 'unblocked': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const mentioned = getMentioned(msg);
+    const target = mentioned[0] || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    await sock.updateBlockStatus(target, 'unblock');
+    await reply('✅ User unblocked.');
+    return true;
+  }
 
-    case 'dlmenu': {
-      return sendMenu(sock, from, msg, MENUS.dlmenu);
-    }
+  case 'setpp': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const q = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!q) return reply('❌ Reply to an image to set as bot profile picture.');
+    const buf = await downloadMediaMessage({ message: q, key: msg.key }, 'buffer', {});
+    await sock.updateProfilePicture(botId, buf);
+    await reply('✅ Profile picture updated!');
+    return true;
+  }
 
-    case 'mediamenu': {
-      return sendMenu(sock, from, msg, MENUS.mediamenu);
-    }
+  case 'delete':
+  case 'del': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    if (!qCtx) return reply('❌ Reply to a message to delete it.');
+    await sock.sendMessage(from, { delete: { remoteJid: from, fromMe: false, id: qCtx.stanzaId, participant: qCtx.participant } });
+    return true;
+  }
 
-    case 'searchmenu': {
-      return sendMenu(sock, from, msg, MENUS.searchmenu);
-    }
+  case 'vv':
+  case 'vv2': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const qMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!qMsg) return reply('❌ Reply to a view-once message.');
+    const buf = await downloadMediaMessage({ message: qMsg, key: msg.key }, 'buffer', {});
+    const mtype = Object.keys(qMsg)[0];
+    if (mtype === 'imageMessage') await sock.sendMessage(from, { image: buf, caption: 'View-once revealed by DENTSU MD V7' }, { quoted: msg });
+    else if (mtype === 'videoMessage') await sock.sendMessage(from, { video: buf, caption: 'View-once revealed by DENTSU MD V7' }, { quoted: msg });
+    else if (mtype === 'audioMessage') await sock.sendMessage(from, { audio: buf, mimetype: 'audio/ogg', ptt: true }, { quoted: msg });
+    else await reply('❌ Unsupported media type.');
+    return true;
+  }
 
-    case 'randommenu': {
-      return sendMenu(sock, from, msg, MENUS.randommenu);
+  case 'broadcast': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .broadcast Your message here');
+    const sessions = store.getAllSessions();
+    let sent = 0;
+    for (const [num, s] of Object.entries(sessions)) {
+      try { await s.sock.sendMessage(num + '@s.whatsapp.net', { text }); sent++; } catch (_) {}
     }
+    await reply(`✅ Broadcast sent to ${sent} session(s).`);
+    return true;
+  }
 
-    case 'animemenu': {
-      return sendMenu(sock, from, msg, MENUS.animemenu);
+  case 'addsudo': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const m = getMentioned(msg);
+    const t = m[0] || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    sudoList.add(t);
+    await reply(`✅ @${t.split('@')[0]} added to sudo list.`, { mentions: [t] });
+    return true;
+  }
+
+  case 'delsudo': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const m = getMentioned(msg);
+    const t = m[0] || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    sudoList.delete(t);
+    await reply(`✅ @${t.split('@')[0]} removed from sudo list.`);
+    return true;
+  }
+
+  case 'listsudo': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!sudoList.size) return reply('📋 Sudo list is empty.');
+    await reply(`📋 *Sudo List:*\n${[...sudoList].map((v,i) => `${i+1}. @${v.split('@')[0]}`).join('\n')}`);
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 👥 GROUP COMMANDS (groupAdmins = bot must be admin in group)
+  // ════════════════════════════════════════════════════════════════
+
+  case 'kick': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isOwner && !isAdmin) return reply('❌ Admin only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    if (!target) return reply('❌ Tag or reply to a user to kick!');
+    await sock.groupParticipantsUpdate(from, [target], 'remove');
+    await reply(`✅ @${target.split('@')[0]} has been kicked.`, { mentions: [target] });
+    return true;
+  }
+
+  case 'add': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isOwner && !isAdmin) return reply('❌ Admin only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = qCtx?.participant || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    await sock.groupParticipantsUpdate(from, [target], 'add');
+    await reply(`✅ @${target.split('@')[0]} added to group.`);
+    return true;
+  }
+
+  case 'promote': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin) return reply('❌ Admin only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    await sock.groupParticipantsUpdate(from, [target], 'promote');
+    await reply(`✅ @${target.split('@')[0]} promoted to admin!`);
+    return true;
+  }
+
+  case 'demote': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin) return reply('❌ Admin only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    await sock.groupParticipantsUpdate(from, [target], 'demote');
+    await reply(`✅ @${target.split('@')[0]} demoted from admin!`);
+    return true;
+  }
+
+  case 'mute': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin) return reply('❌ Admin only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    await sock.groupSettingUpdate(from, 'announcement');
+    await reply('🔇 Group muted! Only admins can send messages.');
+    return true;
+  }
+
+  case 'unmute': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin) return reply('❌ Admin only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    await sock.groupSettingUpdate(from, 'not_announcement');
+    await reply('🔊 Group unmuted! Everyone can send messages.');
+    return true;
+  }
+
+  case 'left': {
+    if (!isOwner) return reply('❌ Owner only.');
+    await reply('👋 Goodbye!');
+    await sock.groupLeave(from);
+    return true;
+  }
+
+  case 'grouplink':
+  case 'invite': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const code = await sock.groupInviteCode(from);
+    await reply(`🔗 *Group Link:*\nhttps://chat.whatsapp.com/${code}`);
+    return true;
+  }
+
+  case 'resetlink':
+  case 'revoke': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    await sock.groupRevokeInvite(from);
+    const newCode = await sock.groupInviteCode(from);
+    await reply(`✅ Link reset!\n🔗 New link: https://chat.whatsapp.com/${newCode}`);
+    return true;
+  }
+
+  case 'tagall':
+  case 'everyone': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    const tagText = args.join(' ') || 'Everyone!';
+    let teks = `📢 *${tagText}*\n\n`;
+    for (const mem of participants) teks += `@${mem.id.split('@')[0]}\n`;
+    await sock.sendMessage(from, { text: teks, mentions: participants.map(a => a.id) }, { quoted: msg });
+    return true;
+  }
+
+  case 'hidetag': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    await sock.sendMessage(from, {
+      text: text || '',
+      mentions: participants.map(a => a.id),
+    }, { quoted: msg });
+    return true;
+  }
+
+  case 'totag':
+  case 'tag': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin) return reply('❌ Admins only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    if (!qCtx) return reply(`❌ Reply to a message with ${prefix}${command}`);
+    await sock.sendMessage(from, { forward: { key: { id: qCtx.stanzaId, fromMe: false, participant: qCtx.participant, remoteJid: from }, message: qCtx.quotedMessage }, mentions: participants.map(a => a.id) });
+    return true;
+  }
+
+  case 'subject': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    if (!text) return reply('❌ Usage: .subject New Group Name');
+    await sock.groupUpdateSubject(from, text);
+    await reply(`✅ Group name changed to: *${text}*`);
+    return true;
+  }
+
+  case 'desc': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    if (!text) return reply('❌ Usage: .desc New description');
+    await sock.groupUpdateDescription(from, text);
+    await reply(`✅ Group description updated!`);
+    return true;
+  }
+
+  case 'listadmin':
+  case 'admin': {
+    if (!isGroup) return reply('❌ Group only.');
+    const admins = participants.filter(p => p.admin);
+    const listText = admins.map((v, i) => `${i+1}. @${v.id.split('@')[0]}`).join('\n');
+    await sock.sendMessage(from, { text: `👑 *Group Admins:*\n${listText}`, mentions: admins.map(v => v.id) }, { quoted: msg });
+    return true;
+  }
+
+  case 'groupinfo': {
+    if (!isGroup) return reply('❌ Group only.');
+    const g = groupMeta;
+    const txt = `╔══[ 📊 GROUP INFO ]══╗
+║ *Name:* ${g.subject}
+║ *ID:* ${g.id}
+║ *Members:* ${participants.length}
+║ *Admins:* ${participants.filter(p=>p.admin).length}
+║ *Created:* ${new Date(g.creation * 1000).toLocaleString()}
+╚═══════════════════╝`;
+    await reply(txt);
+    return true;
+  }
+
+  case 'antilink': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (antiLinkGroups.has(from)) {
+      antiLinkGroups.delete(from);
+      await reply('✅ Anti-link disabled for this group.');
+    } else {
+      antiLinkGroups.add(from);
+      await reply('✅ Anti-link enabled for this group!');
     }
+    return true;
+  }
 
-    // ════════════════════════════════════════════════════════════
-    //  🏓  UTILITAIRES DE BASE
-    // ════════════════════════════════════════════════════════════
-    case 'ping': {
-      const start = Date.now();
-      await reply('🏓 Pong!');
-      return reply(`✅ *Ping*: ${Date.now() - start}ms\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'alive':
-    case 'status':
-    case 'botinfo': {
-      return reply(`✅ *${config.BOT_NAME}*\n\n🟢 En ligne!\n👨‍💻 Dev: ${config.DEV_NAME}\n🌐 Mode: ${config.MODE.toUpperCase()}\n\n${config.BOT_FOOTER}`);
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  🧠  IA
-    // ════════════════════════════════════════════════════════════
-    case 'ai':
-    case 'gpt':
-    case 'gpt4':
-    case 'gpt5':
-    case 'metaai':
-    case 'deepseek':
-    case 'qwen':
-    case 'grok-ai': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}${command} [question]`);
-      await reply('🤖 Traitement en cours...');
-      const resp = await callFreeAI(text);
-      return reply(`🧠 *${command.toUpperCase()}*\n\n${resp}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'gemini': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}gemini [question]`);
-      await reply('✨ Gemini pense...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/ai/gemini?text=${encodeURIComponent(text)}`);
-        const ans = res.data?.answer || res.data?.response || 'Pas de réponse.';
-        return reply(`✨ *Gemini AI*\n\n${ans}\n\n${config.BOT_FOOTER}`);
-      } catch (e) {
-        return reply(`✨ *Gemini AI*\n\n${await callFreeAI(text)}\n\n${config.BOT_FOOTER}`);
+  case 'warn': {
+    if (!isOwner && !isAdmin) return reply('❌ Admin only.');
+    if (!isGroup) return reply('❌ Group only.');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant;
+    if (!target) return reply('❌ Tag or reply to a user to warn!');
+    const key = `${from}-${target}`;
+    const count = (warnStore.get(key) || 0) + 1;
+    warnStore.set(key, count);
+    if (count >= 3) {
+      warnStore.delete(key);
+      if (groupAdmins) {
+        await sock.groupParticipantsUpdate(from, [target], 'remove');
+        await reply(`❌ @${target.split('@')[0]} was kicked after 3 warnings!`, { mentions: [target] });
+      } else {
+        await reply(`⚠️ @${target.split('@')[0]} has 3 warnings (bot not admin to kick)!`, { mentions: [target] });
       }
+    } else {
+      await reply(`⚠️ *Warning ${count}/3* given to @${target.split('@')[0]}!`, { mentions: [target] });
     }
+    return true;
+  }
 
-    case 'codeai': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}codeai [code/question]`);
-      await reply('💻 Analyse du code...');
-      const resp = await callFreeAI(`Expert développeur: ${text}`);
-      return reply(`💻 *Code AI*\n\n\`\`\`${resp}\`\`\`\n\n${config.BOT_FOOTER}`);
-    }
+  case 'warncount': {
+    if (!isGroup) return reply('❌ Group only.');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant;
+    if (!target) return reply('❌ Tag or reply to a user!');
+    const count = warnStore.get(`${from}-${target}`) || 0;
+    await reply(`⚠️ @${target.split('@')[0]} has *${count}/3* warnings.`, { mentions: [target] });
+    return true;
+  }
 
-    case 'storyai': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}storyai [thème]`);
-      await reply('📖 Création d\'histoire...');
-      const resp = await callFreeAI(`Écris une courte histoire sur: ${text}`);
-      return reply(`📖 *Story AI*\n\n${resp}\n\n${config.BOT_FOOTER}`);
-    }
+  case 'warnreset': {
+    if (!isOwner && !isAdmin) return reply('❌ Admin only.');
+    if (!isGroup) return reply('❌ Group only.');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant;
+    if (!target) return reply('❌ Tag or reply to a user!');
+    warnStore.delete(`${from}-${target}`);
+    await reply(`✅ Warnings reset for @${target.split('@')[0]}.`);
+    return true;
+  }
 
-    case 'triviaai': {
-      await reply('🎯 Génération...');
-      const resp = await callFreeAI('Donne une question de culture générale avec sa réponse');
-      return reply(`🎯 *Trivia AI*\n\n${resp}\n\n${config.BOT_FOOTER}`);
-    }
+  case 'closetime': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    const value = parseInt(args[0]);
+    const unit = args[1];
+    if (!value || !unit) return reply('❌ Usage: .closetime 10 minute');
+    const ms = unit==='second' ? value*1000 : unit==='minute' ? value*60000 : unit==='hour' ? value*3600000 : unit==='day' ? value*86400000 : 0;
+    if (!ms) return reply('❌ Unit must be: second / minute / hour / day');
+    await reply(`⏳ Group will close in *${value} ${unit}(s)*...`);
+    setTimeout(async () => {
+      try { await sock.groupSettingUpdate(from, 'announcement'); await sendMsg('🔒 Group is now closed (admins only).'); }
+      catch (e) { await sendMsg('❌ Failed to close group: ' + e.message); }
+    }, ms);
+    return true;
+  }
 
-    case 'photoai': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}photoai [description]`);
-      return reply(`🖼️ *Photo AI*\n\n"${text}"\n\n⚠️ Génération d'images = API premium.\nVisite: ${config.WEBSITE}\n\n${config.BOT_FOOTER}`);
-    }
+  case 'opentime': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    const value = parseInt(args[0]);
+    const unit = args[1];
+    if (!value || !unit) return reply('❌ Usage: .opentime 5 minute');
+    const ms = unit==='second' ? value*1000 : unit==='minute' ? value*60000 : unit==='hour' ? value*3600000 : unit==='day' ? value*86400000 : 0;
+    if (!ms) return reply('❌ Unit must be: second / minute / hour / day');
+    await reply(`⏳ Group will open in *${value} ${unit}(s)*...`);
+    setTimeout(async () => {
+      try { await sock.groupSettingUpdate(from, 'not_announcement'); await sendMsg('🔓 Group is now open!'); }
+      catch (e) { await sendMsg('❌ Failed to open group: ' + e.message); }
+    }, ms);
+    return true;
+  }
 
-    // ════════════════════════════════════════════════════════════
-    //  👥  GROUPE
-    // ════════════════════════════════════════════════════════════
-    case 'tagall':
-    case 'everyone':
-    case 'rtag':
-    case 'totag': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        const meta = await sock.groupMetadata(from);
-        const mentions = meta.participants.map(m => m.id);
-        await sock.sendMessage(from, {
-          text: `📢 *${text || 'Attention tout le monde!'}*\n\n${meta.participants.map(m => `@${m.id.split('@')[0]}`).join(' ')}`,
-          mentions
-        });
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
+  case 'join': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Provide an invite link. Example: .join https://chat.whatsapp.com/XXXX');
+    const code = text.split('https://chat.whatsapp.com/')[1]?.split(' ')[0];
+    if (!code) return reply('❌ Invalid WhatsApp invite link.');
+    await sock.groupAcceptInvite(code);
+    await reply('✅ Joined group successfully!');
+    return true;
+  }
 
-    case 'hidetag': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        const meta = await sock.groupMetadata(from);
-        await sock.sendMessage(from, { text: text || '📢 Message', mentions: meta.participants.map(m => m.id) });
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
+  case 'creategroup':
+  case 'creategc': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .creategroup GroupName');
+    const cret = await sock.groupCreate(text, []);
+    const code = await sock.groupInviteCode(cret.id);
+    await reply(`✅ Group Created!\n📌 Name: ${cret.subject}\n🔗 Link: https://chat.whatsapp.com/${code}`);
+    return true;
+  }
 
-    case 'promote': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
-      try {
-        await sock.groupParticipantsUpdate(from, mentioned, 'promote');
-        reply(`✅ @${mentioned[0].split('@')[0]} promu admin!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
+  case 'hijack': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only!');
+    if (!isAdmin) return reply('❌ You must be group admin!');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
 
-    case 'demote': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
-      try {
-        await sock.groupParticipantsUpdate(from, mentioned, 'demote');
-        reply(`✅ @${mentioned[0].split('@')[0]} rétrogradé!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
+    const creator = groupMeta.owner;
+    const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin');
+    let kickedList = [];
 
-    case 'kick': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
-      try {
-        await sock.groupParticipantsUpdate(from, mentioned, 'remove');
-        reply(`✅ @${mentioned[0].split('@')[0]} expulsé!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'add': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      if (!args[0]) return reply('❌ Usage: .add 242XXXXXXX');
-      const num = args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-      try {
-        await sock.groupParticipantsUpdate(from, [num], 'add');
-        reply(`✅ ${args[0]} ajouté!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'mute':
-    case 'closegc': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        await sock.groupSettingUpdate(from, 'announcement');
-        reply('🔇 Groupe muté (admins seulement)');
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'unmute':
-    case 'opengc': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        await sock.groupSettingUpdate(from, 'not_announcement');
-        reply('🔊 Groupe ouvert à tous!');
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'grouplink':
-    case 'invite': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        const link = await sock.groupInviteCode(from);
-        reply(`🔗 Lien:\nhttps://chat.whatsapp.com/${link}`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'resetlink':
-    case 'revoke': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        await sock.groupRevokeInvite(from);
-        const link = await sock.groupInviteCode(from);
-        reply(`✅ Nouveau lien:\nhttps://chat.whatsapp.com/${link}`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'kickall': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try {
-        const meta = await sock.groupMetadata(from);
-        const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-        const ownerJid = config.OWNER_NUMBER + '@s.whatsapp.net';
-        const members = meta.participants.filter(p => p.id !== botId && p.id !== ownerJid).map(p => p.id);
-        for (const m of members) {
-          try { await sock.groupParticipantsUpdate(from, [m], 'remove'); await delay(500); } catch (e2) {}
-        }
-        reply(`✅ ${members.length} membres expulsés!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'listadmins': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      try {
-        const meta = await sock.groupMetadata(from);
-        const admins = meta.participants.filter(p => p.admin);
-        reply(`👑 *Admins*\n\n${admins.map(a => `• @${a.id.split('@')[0]}`).join('\n')}`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'groupinfo': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      try {
-        const meta = await sock.groupMetadata(from);
-        reply(`📋 *Info Groupe*\n\n📌 Nom: ${meta.subject}\n👥 Membres: ${meta.participants.length}\n👑 Admins: ${meta.participants.filter(p => p.admin).length}\n📝 Desc: ${meta.desc || 'Aucune'}\n🆔 ID: ${from}`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'subject': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      if (!text) return reply('❌ Donne un nom!');
-      try {
-        await sock.groupUpdateSubject(from, text);
-        reply(`✅ Nom changé: *${text}*`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'desc': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      if (!text) return reply('❌ Donne une description!');
-      try {
-        await sock.groupUpdateDescription(from, text);
-        reply('✅ Description mise à jour!');
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'left':
-    case 'leave': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      try { await sock.groupLeave(from); } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'join': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      if (!text) return reply('❌ Donne le lien du groupe!');
-      const code = text.split('chat.whatsapp.com/').pop() || text;
-      try {
-        await sock.groupAcceptInvite(code);
-        reply('✅ Groupe rejoint!');
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'poll': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      const parts = text.split('|').map(s => s.trim());
-      if (parts.length < 3) return reply('❌ Usage: .poll Question | Option1 | Option2');
-      const [question, ...options] = parts;
-      try {
-        await sock.sendMessage(from, { poll: { name: question, values: options, selectableCount: 1 } });
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'warn': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
-      const key = from + '_' + mentioned[0];
-      const count = (warnStore.get(key) || 0) + 1;
-      warnStore.set(key, count);
-      if (count >= 3) {
-        try { await sock.groupParticipantsUpdate(from, [mentioned[0]], 'remove'); } catch (_) {}
-        warnStore.delete(key);
-        return reply(`⛔ @${mentioned[0].split('@')[0]} expulsé après 3 avertissements!`);
-      }
-      return reply(`⚠️ *Avertissement ${count}/3*\n\n@${mentioned[0].split('@')[0]}\nRaison: ${text || 'Non précisée'}`);
-    }
-
-    case 'lock': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try { await sock.groupSettingUpdate(from, 'locked'); reply('🔒 Groupe verrouillé!'); }
-      catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'unlock': {
-      if (!isGroup) return reply('❌ Réservé aux groupes!');
-      if (!await isBotAdmin(sock, from)) return reply('❌ Le bot doit être admin!');
-      try { await sock.groupSettingUpdate(from, 'unlocked'); reply('🔓 Groupe déverrouillé!'); }
-      catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'creategroup': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      if (!text) return reply('❌ Donne un nom au groupe!');
-      try {
-        await sock.groupCreate(text, [sender]);
-        reply(`✅ Groupe "${text}" créé!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  👑  OWNER / ADMIN BOT
-    // ════════════════════════════════════════════════════════════
-    case 'mode': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const val = text?.toLowerCase();
-      if (val === 'self') { config.MODE = 'self'; return reply('✅ Mode SELF activé!'); }
-      if (val === 'public') { config.MODE = 'public'; return reply('✅ Mode PUBLIC activé!'); }
-      return reply(`ℹ️ Mode actuel: ${config.MODE.toUpperCase()}\nUsage: .mode public / .mode self`);
-    }
-
-    case 'self': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      config.MODE = 'self';
-      return reply('✅ Mode SELF activé!');
-    }
-
-    case 'public': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      config.MODE = 'public';
-      return reply('✅ Mode PUBLIC activé!');
-    }
-
-    case 'block': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length && !args[0]) return reply('❌ Mentionne quelqu\'un!');
-      const target = mentioned[0] || (args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net');
-      try {
-        await sock.updateBlockStatus(target, 'block');
-        blocklist.add(target);
-        reply(`🚫 @${target.split('@')[0]} bloqué!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'unblock': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length && !args[0]) return reply('❌ Mentionne quelqu\'un!');
-      const target = mentioned[0] || (args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net');
-      try {
-        await sock.updateBlockStatus(target, 'unblock');
-        blocklist.delete(target);
-        reply(`✅ @${target.split('@')[0]} débloqué!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'broadcast': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      if (!text) return reply('❌ Usage: .broadcast [message]');
-      const sessions = store.getAllSessions();
-      let sent = 0;
-      for (const [num, sess] of sessions) {
+    for (const admin of admins) {
+      if (admin.id !== botId && admin.id !== sender) {
         try {
-          await sess.sock.sendMessage(num + '@s.whatsapp.net', { text: `📢 *Broadcast DENTSU MD V7*\n\n${text}\n\n${config.BOT_FOOTER}` });
-          sent++;
-          await delay(1000);
-        } catch (e) {}
-      }
-      reply(`✅ Broadcast envoyé à ${sent} contact(s)!`);
-      return;
-    }
-
-    case 'addsudo': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
-      sudoList.add(mentioned[0]);
-      reply(`✅ @${mentioned[0].split('@')[0]} ajouté en sudo!`);
-      return;
-    }
-
-    case 'delsudo': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
-      sudoList.delete(mentioned[0]);
-      reply(`✅ @${mentioned[0].split('@')[0]} retiré!`);
-      return;
-    }
-
-    case 'listsudo': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      reply(sudoList.size === 0 ? '📋 Aucun sudo' : `👑 *Sudo*:\n${[...sudoList].map(j => `• @${j.split('@')[0]}`).join('\n')}`);
-      return;
-    }
-
-    case 'del':
-    case 'delete': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const quotedKey = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-      const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
-      if (!quotedKey) return reply('❌ Réponds à un message à supprimer!');
-      try {
-        await sock.sendMessage(from, { delete: { remoteJid: from, fromMe: quotedParticipant === sock.user.id, id: quotedKey, participant: quotedParticipant } });
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'listgc': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      try {
-        const groups = await sock.groupFetchAllParticipating();
-        const list = Object.values(groups).map(g => `• ${g.subject} (${g.participants.length} membres)`);
-        reply(`📋 *Groupes actifs*:\n\n${list.join('\n') || 'Aucun'}`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'leaveall': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      try {
-        const groups = await sock.groupFetchAllParticipating();
-        const ids = Object.keys(groups);
-        for (const id of ids) { try { await sock.groupLeave(id); await delay(1000); } catch (e2) {} }
-        reply(`✅ Quitté ${ids.length} groupe(s)!`);
-      } catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'autoviewstatus': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const val = text?.toLowerCase();
-      if (val === 'on') { config.AUTO_VIEW_STATUS = true; return reply('✅ Auto-view status ON!'); }
-      if (val === 'off') { config.AUTO_VIEW_STATUS = false; return reply('✅ Auto-view status OFF!'); }
-      return reply(`ℹ️ Auto-view: ${config.AUTO_VIEW_STATUS ? 'ON' : 'OFF'}`);
-    }
-
-    case 'autotyping': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const val = text?.toLowerCase();
-      if (val === 'on') { config.AUTO_TYPING = true; return reply('✅ Auto-typing ON!'); }
-      if (val === 'off') { config.AUTO_TYPING = false; return reply('✅ Auto-typing OFF!'); }
-      return reply(`ℹ️ Auto-typing: ${config.AUTO_TYPING ? 'ON' : 'OFF'}`);
-    }
-
-    case 'autorecording': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      const val = text?.toLowerCase();
-      if (val === 'on') { config.AUTO_RECORDING = true; return reply('✅ Auto-recording ON!'); }
-      if (val === 'off') { config.AUTO_RECORDING = false; return reply('✅ Auto-recording OFF!'); }
-      return reply(`ℹ️ Auto-recording: ${config.AUTO_RECORDING ? 'ON' : 'OFF'}`);
-    }
-
-    case 'setbio':
-    case 'setaccount': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      if (!text) return reply('❌ Donne une bio!');
-      try { await sock.updateProfileStatus(text); reply(`✅ Bio: "${text}"`); }
-      catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    case 'setname':
-    case 'myname': {
-      if (!ownerCheck) return reply('❌ Réservé au propriétaire!');
-      if (!text) return reply('❌ Donne un nom!');
-      try { await sock.updateProfileName(text); reply(`✅ Nom: "${text}"`); }
-      catch (e) { reply('❌ Erreur: ' + e.message); }
-      return;
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  🎉  FUN
-    // ════════════════════════════════════════════════════════════
-    case 'truth': {
-      return reply(`🎲 *Vérité*\n\n${truths[Math.floor(Math.random() * truths.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'dare': {
-      return reply(`🎯 *Défi*\n\n${dares[Math.floor(Math.random() * dares.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'joke':
-    case 'meme': {
-      return reply(`😂 *Blague*\n\n${jokes[Math.floor(Math.random() * jokes.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'ship': {
-      const mentioned = getMentioned(msg);
-      if (mentioned.length < 2) return reply('❌ Mentionne 2 personnes! Ex: .ship @user1 @user2');
-      const pct = Math.floor(Math.random() * 101);
-      const bar = '❤️'.repeat(Math.floor(pct / 10)) + '🖤'.repeat(10 - Math.floor(pct / 10));
-      return reply(`💕 *Ship*\n\n@${mentioned[0].split('@')[0]} + @${mentioned[1].split('@')[0]}\n\n${bar}\n💯 ${pct}%\n\n${pct >= 75 ? '🔥 PARFAITS!' : pct >= 50 ? '💛 Bonne chance!' : '💔 Hmm...'}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'rate': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}rate [chose]`);
-      const pct = Math.floor(Math.random() * 101);
-      return reply(`⭐ *Rating*\n\n"${text}"\n\n${'⭐'.repeat(Math.floor(pct / 20))}\n📊 ${pct}/100\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'flirt': {
-      const mentioned = getMentioned(msg);
-      const target = mentioned.length ? `@${mentioned[0].split('@')[0]}` : 'toi';
-      return reply(`💖 *Flirt pour ${target}*\n\n${flirts[Math.floor(Math.random() * flirts.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'roast': {
-      const mentioned = getMentioned(msg);
-      const target = mentioned.length ? `@${mentioned[0].split('@')[0]}` : 'toi';
-      return reply(`🔥 *Roast pour ${target}*\n\n${roasts[Math.floor(Math.random() * roasts.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'compliment': {
-      const mentioned = getMentioned(msg);
-      const target = mentioned.length ? `@${mentioned[0].split('@')[0]}` : 'toi';
-      const compliments = ["Tu es quelqu'un d'exceptionnel!", "Le monde est meilleur avec toi!", "Ta gentillesse illumine les journées!"];
-      return reply(`💐 *Compliment pour ${target}*\n\n${compliments[Math.floor(Math.random() * compliments.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'wouldyou': {
-      const scenarios = [
-        "Préférerais-tu voler ou être invisible ?",
-        "Vivrais-tu 100 ans normalement ou 50 ans en parfaite santé ?",
-        "Riche mais seul ou pauvre avec des amis ?",
-        "Préférerais-tu parler toutes les langues ou jouer de tous les instruments ?",
-      ];
-      return reply(`🤔 *Would You Rather?*\n\n${scenarios[Math.floor(Math.random() * scenarios.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case '8ball': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}8ball [question]`);
-      const answers = ['✅ Oui!', '✅ Certainement!', '✅ Très probablement!', '❓ Difficile à dire...', '❓ Redemande plus tard!', '❌ Non!', '❌ Pas du tout!'];
-      return reply(`🎱 *8-Ball*\n\n❓ ${text}\n\n${answers[Math.floor(Math.random() * answers.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'advice': {
-      const advices = [
-        "Souris chaque matin, ça devient une habitude!",
-        "La patience est la clé de toutes les portes!",
-        "Chaque jour est une nouvelle chance de s'améliorer!",
-        "Prends soin de ta santé mentale autant que physique!",
-      ];
-      return reply(`💡 *Conseil*\n\n${advices[Math.floor(Math.random() * advices.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'moviequote':
-    case 'inspire': {
-      return reply(`✨ *Citation*\n\n${quotes[Math.floor(Math.random() * quotes.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'triviafact': {
-      const facts = [
-        "🐙 Les pieuvres ont trois cœurs!",
-        "🍯 Le miel ne se périme jamais!",
-        "🦋 Les papillons goûtent avec leurs pieds!",
-        "🐬 Les dauphins ont des noms propres!",
-        "🧠 Le cerveau peut stocker ~2,5 pétaoctets!",
-      ];
-      return reply(`🧠 *Fact*\n\n${facts[Math.floor(Math.random() * facts.length)]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'urban': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}urban [mot]`);
-      try {
-        const res = await axios.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(text)}`);
-        const def = res.data?.list?.[0];
-        if (!def) return reply(`❌ Aucune définition pour "${text}"`);
-        return reply(`📖 *Urban Dictionary*\n\n*${text}*\n\n${def.definition.substring(0, 500)}\n\n_Exemple: ${def.example?.substring(0, 200) || 'N/A'}_\n\n👍 ${def.thumbs_up} | 👎 ${def.thumbs_down}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Impossible de trouver "${text}"`); }
-    }
-
-    case 'ascii': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}ascii [texte]`);
-      const map = { A:'/-\\',B:'|3',C:'(',D:'|)',E:'3',F:'|=',G:'6',H:'|-|',I:'!',J:'_|',K:'|<',L:'|_',M:'|\\/|',N:'|\\|',O:'0',P:'|D',Q:'(_,)',R:'|2',S:'5',T:'7',U:'|_|',V:'\\/',W:'\\/\\/',X:'><',Y:'`/',Z:'2' };
-      const ascii = text.toUpperCase().split('').map(c => map[c] || c).join(' ');
-      return reply(`🔤 *ASCII*\n\n${ascii}\n\n${config.BOT_FOOTER}`);
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  🎮  JEUX
-    // ════════════════════════════════════════════════════════════
-    case 'rps': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}rps [pierre/feuille/ciseaux]`);
-      const choices = ['pierre', 'feuille', 'ciseaux'];
-      const emojis = { pierre: '🪨', feuille: '📄', ciseaux: '✂️' };
-      const player = text.toLowerCase();
-      if (!choices.includes(player)) return reply('❌ Choisis: pierre, feuille ou ciseaux');
-      const bot = choices[Math.floor(Math.random() * 3)];
-      let result = player === bot ? '🤝 Égalité!'
-        : ((player === 'pierre' && bot === 'ciseaux') || (player === 'feuille' && bot === 'pierre') || (player === 'ciseaux' && bot === 'feuille'))
-          ? '🎉 Tu gagnes!' : '💀 Tu perds!';
-      return reply(`🎮 *Pierre/Feuille/Ciseaux*\n\n👤 Toi: ${emojis[player]} ${player}\n🤖 Bot: ${emojis[bot]} ${bot}\n\n${result}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'dice': {
-      const result = Math.floor(Math.random() * 6) + 1;
-      const emojis = ['', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
-      return reply(`🎲 *Dé*\n\n${emojis[result]} = *${result}*\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'coin': {
-      return reply(`🪙 *Pile ou Face*\n\n${Math.random() > 0.5 ? 'FACE 👑' : 'PILE 🔵'}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'coinbattle': {
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply(`❌ Mentionne un adversaire!`);
-      const p1 = Math.random() > 0.5, p2 = Math.random() > 0.5;
-      const winner = p1 !== p2 ? (p1 ? `@${senderNumber}` : `@${mentioned[0].split('@')[0]}`) : null;
-      return reply(`🪙 *Coin Battle*\n\n@${senderNumber}: ${p1 ? '👑 FACE' : '🔵 PILE'}\n@${mentioned[0].split('@')[0]}: ${p2 ? '👑 FACE' : '🔵 PILE'}\n\n${winner ? `🏆 Gagnant: ${winner}!` : '🤝 Égalité!'}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'numberbattle':
-    case 'numbattle': {
-      const mentioned = getMentioned(msg);
-      if (!mentioned.length) return reply('❌ Mentionne un adversaire!');
-      const n1 = Math.floor(Math.random() * 100) + 1, n2 = Math.floor(Math.random() * 100) + 1;
-      const winner = n1 > n2 ? `@${senderNumber}` : n2 > n1 ? `@${mentioned[0].split('@')[0]}` : null;
-      return reply(`🔢 *Number Battle*\n\n@${senderNumber}: *${n1}*\n@${mentioned[0].split('@')[0]}: *${n2}*\n\n${winner ? `🏆 ${winner}!` : '🤝 Égalité!'}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'hangman': {
-      const word = hangmanWords[Math.floor(Math.random() * hangmanWords.length)];
-      activeGames.set(from + '_hangman', { word, guessed: [], tries: 6 });
-      return reply(`🎯 *Pendu*\n\n${'_ '.repeat(word.length).trim()}\n\n${word.length} lettres | ❤️ 6 essais\n\nTape ${config.PREFIX}lettre [a-z]\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'lettre': {
-      const game = activeGames.get(from + '_hangman');
-      if (!game) return reply(`❌ Pas de partie! Tape ${config.PREFIX}hangman`);
-      const letter = text?.toLowerCase()?.[0];
-      if (!letter || !/[a-z]/.test(letter)) return reply('❌ Tape une lettre valide!');
-      if (game.guessed.includes(letter)) return reply(`❌ Déjà essayé '${letter}'!`);
-      game.guessed.push(letter);
-      if (!game.word.includes(letter)) game.tries--;
-      const display = game.word.split('').map(c => game.guessed.includes(c) ? c : '_').join(' ');
-      if (!display.includes('_')) { activeGames.delete(from + '_hangman'); return reply(`🎉 BRAVO! Mot: *${game.word}*\n\n${config.BOT_FOOTER}`); }
-      if (game.tries <= 0) { activeGames.delete(from + '_hangman'); return reply(`💀 PERDU! Mot: *${game.word}*\n\n${config.BOT_FOOTER}`); }
-      return reply(`🎯 *Pendu*\n\n${display}\n\n❤️ Essais: ${game.tries} | Lettres: ${game.guessed.join(', ')}`);
-    }
-
-    case 'guess': {
-      const number = Math.floor(Math.random() * 100) + 1;
-      guessGames.set(from + '_' + sender, { number, tries: 0 });
-      return reply(`🔢 *Devine!*\n\nNombre entre 1-100.\nTape ${config.PREFIX}g [nombre]\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'g': {
-      const game = guessGames.get(from + '_' + sender);
-      if (!game) return reply(`❌ Pas de partie! Tape ${config.PREFIX}guess`);
-      const n = parseInt(text);
-      if (isNaN(n)) return reply('❌ Donne un nombre!');
-      game.tries++;
-      if (n === game.number) { guessGames.delete(from + '_' + sender); return reply(`🎉 BRAVO! C'était *${game.number}* en ${game.tries} essai(s)!\n\n${config.BOT_FOOTER}`); }
-      return reply(`${n < game.number ? '📈 Plus grand!' : '📉 Plus petit!'} (essai ${game.tries})`);
-    }
-
-    case 'math': {
-      const ops = ['+', '-', '*'];
-      const op = ops[Math.floor(Math.random() * 3)];
-      const a = Math.floor(Math.random() * 50) + 1, b = Math.floor(Math.random() * 20) + 1;
-      const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
-      mathGames.set(from + '_math', { answer, question: `${a} ${op} ${b}` });
-      setTimeout(() => mathGames.delete(from + '_math'), 30000);
-      return reply(`🧮 *Math*\n\n${a} ${op} ${b} = ?\n\nTape ${config.PREFIX}rep [réponse] (30s)\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'rep': {
-      const game = mathGames.get(from + '_math');
-      if (!game) return reply(`❌ Pas de question! Tape ${config.PREFIX}math`);
-      const ans = parseInt(text);
-      if (isNaN(ans)) return reply('❌ Donne un nombre!');
-      mathGames.delete(from + '_math');
-      return reply(ans === game.answer ? `🎉 CORRECT! ${game.question} = ${game.answer}\n\n${config.BOT_FOOTER}` : `❌ FAUX! ${game.question} = ${game.answer}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'emojiquiz': {
-      const quizzes = [
-        { q: '🦁 + 👑 = ?', a: 'roi lion' },
-        { q: '🕷️ + 👦 = ?', a: 'spider-man' },
-        { q: '🦇 + 🦸 = ?', a: 'batman' },
-        { q: '🌊 + 🏠 = ?', a: 'moana' },
-      ];
-      const quiz = quizzes[Math.floor(Math.random() * quizzes.length)];
-      activeGames.set(from + '_emoji_' + sender, quiz.a);
-      return reply(`🎯 *Emoji Quiz*\n\n${quiz.q}\n\nTape ${config.PREFIX}ans [réponse]\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'ans': {
-      const answer = activeGames.get(from + '_emoji_' + sender);
-      if (!answer) return reply(`❌ Pas de quiz! Tape ${config.PREFIX}emojiquiz`);
-      if (text?.toLowerCase().includes(answer)) {
-        activeGames.delete(from + '_emoji_' + sender);
-        return reply(`🎉 CORRECT! Réponse: *${answer}*\n\n${config.BOT_FOOTER}`);
-      }
-      return reply(`❌ FAUX! Essaie encore!`);
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  🎵  SONS
-    // ════════════════════════════════════════════════════════════
-    case 'tts':
-    case 'say': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}${command} [texte]`);
-      try {
-        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=fr&client=tw-ob&q=${encodeURIComponent(text)}`;
-        await sock.sendMessage(from, { audio: { url }, mimetype: 'audio/mp4', ptt: true }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur TTS: ${e.message}`); }
-      return;
-    }
-
-    case 'bass':
-    case 'blown':
-    case 'deep':
-    case 'earrape':
-    case 'fast':
-    case 'nightcore':
-    case 'reverse':
-    case 'robot':
-    case 'slow':
-    case 'smooth':
-    case 'squirrel': {
-      const quotedMsg2 = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (!quotedMsg2?.audioMessage && !quotedMsg2?.videoMessage) {
-        return reply(`❌ Réponds à un audio!\nUsage: Réponds avec ${config.PREFIX}${command}\n\n${config.BOT_FOOTER}`);
-      }
-      return reply(`⏳ Effet *${command}* en cours...\n\n⚠️ FFmpeg requis sur le serveur.\n\n${config.BOT_FOOTER}`);
-    }
-
-    // ════════════════════════════════════════════════════════════
-    //  🔧  AUTRES OUTILS
-    // ════════════════════════════════════════════════════════════
-    case 'weather': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}weather [ville]`);
-      try {
-        const res = await axios.get(`https://wttr.in/${encodeURIComponent(text)}?format=j1`);
-        const w = res.data?.current_condition?.[0];
-        if (!w) return reply('❌ Ville non trouvée!');
-        return reply(`🌤️ *Météo - ${text}*\n\n🌡️ ${w.temp_C}°C (${w.temp_F}°F)\n💧 Humidité: ${w.humidity}%\n💨 Vent: ${w.windspeedKmph} km/h\n☁️ ${w.weatherDesc?.[0]?.value || 'N/A'}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Ville "${text}" introuvable`); }
-    }
-
-    case 'wiki': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}wiki [recherche]`);
-      try {
-        const res = await axios.get(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(text)}`);
-        const data = res.data;
-        return reply(`📚 *Wikipedia - ${data.title}*\n\n${data.extract?.substring(0, 700)}...\n\n🔗 ${data.content_urls?.desktop?.page || ''}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Aucun résultat pour "${text}"`); }
-    }
-
-    case 'calculate':
-    case 'calc': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}calculate [expression]`);
-      try {
-        const expr = text.replace(/[^0-9+\-*/.() ]/g, '');
-        const result = eval(expr);
-        return reply(`🧮 *Calcul*\n\n${text} = *${result}*\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply('❌ Expression invalide!'); }
-    }
-
-    case 'jid': {
-      const mentioned = getMentioned(msg);
-      const target = mentioned[0] || sender;
-      return reply(`🆔 *JID*\n\n📱 ${target}\n🔢 ${target.split('@')[0]}\n🌐 ${target.split('@')[1]}\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'github': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}github [username]`);
-      try {
-        const res = await axios.get(`https://api.github.com/users/${text}`);
-        const u = res.data;
-        return reply(`🐙 *GitHub - ${u.login}*\n\n📛 Nom: ${u.name || 'N/A'}\n📝 Bio: ${u.bio || 'N/A'}\n📦 Repos: ${u.public_repos}\n👥 Followers: ${u.followers}\n🔗 ${u.html_url}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Utilisateur "${text}" non trouvé!`); }
-    }
-
-    case 'npm': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}npm [package]`);
-      try {
-        const res = await axios.get(`https://registry.npmjs.org/${text}`);
-        const p = res.data, latest = p['dist-tags']?.latest;
-        return reply(`📦 *NPM - ${p.name}*\n\n📝 ${p.description || 'N/A'}\n🏷️ Version: ${latest}\n🔗 https://npmjs.com/package/${text}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Package "${text}" non trouvé!`); }
-    }
-
-    case 'shorturl': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}shorturl [url]`);
-      try {
-        const res = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(text)}`);
-        return reply(`🔗 *URL*\n\nOriginal: ${text}\nCourt: ${res.data}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Erreur: ${e.message}`); }
-    }
-
-    case 'myip': {
-      try {
-        const res = await axios.get('https://api.ipify.org?format=json');
-        return reply(`🌐 *IP du bot*\n\n${res.data.ip}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Erreur: ${e.message}`); }
-    }
-
-    case 'password': {
-      const len = parseInt(text) || 12;
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
-      let pwd = '';
-      for (let i = 0; i < Math.min(len, 32); i++) pwd += chars[Math.floor(Math.random() * chars.length)];
-      return reply(`🔑 *Mot de passe*\n\n\`${pwd}\`\n\n${config.BOT_FOOTER}`);
-    }
-
-    case 'mathfact': {
-      const n = parseInt(text) || Math.floor(Math.random() * 100);
-      try {
-        const res = await axios.get(`http://numbersapi.com/${n}/math`);
-        return reply(`🔢 *Math Fact*\n\n${res.data}\n\n${config.BOT_FOOTER}`);
-      } catch (e) {
-        return reply(`🔢 *Math Fact*\n\n${n} est un nombre ${n % 2 === 0 ? 'pair' : 'impair'}!\n\n${config.BOT_FOOTER}`);
+          await sock.groupParticipantsUpdate(from, [admin.id], 'remove');
+          kickedList.push(`@${admin.id.split('@')[0]}`);
+        } catch (_) {}
       }
     }
 
-    case 'sciencefact': {
-      const facts = [
-        "⚡ La foudre est 5x plus chaude que la surface du soleil!",
-        "🧬 L'ADN humain fait ~2 mètres si déroulé!",
-        "🌌 Plus d'étoiles dans l'univers que de grains de sable!",
-        "💡 La lumière du soleil prend 8min 20s pour atteindre la Terre!",
-      ];
-      return reply(`🔬 *Science Fact*\n\n${facts[Math.floor(Math.random() * facts.length)]}\n\n${config.BOT_FOOTER}`);
+    if (creator && creator !== sender && creator !== botId) {
+      try { await sock.groupParticipantsUpdate(from, [creator], 'remove'); }
+      catch (_) { try { await sock.groupSettingUpdate(from, 'announcement'); } catch (_) {} }
     }
 
-    case 'horoscope': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}horoscope [signe]\nSignes: belier, taureau, gemeaux, cancer, lion, vierge, balance, scorpion, sagittaire, capricorne, verseau, poissons`);
-      const horoscopes = { 'belier':'♈ Journée excellente pour les initiatives!','taureau':'♉ La patience sera ta meilleure alliée.','gemeaux':'♊ Tes capacités de communication brillent!','cancer':'♋ Prends soin de toi et des tiens.','lion':'♌ Tu brilleras dans tout ce que tu fais!','vierge':'♍ L\'organisation te mènera au succès.','balance':'♎ Harmonie et équilibre au rendez-vous.','scorpion':'♏ Fais confiance à ton instinct.','sagittaire':'♐ Aventure et découvertes t\'attendent!','capricorne':'♑ Ton travail acharné portera ses fruits.','verseau':'♒ L\'innovation sera ta force.','poissons':'♓ Ta créativité sera débordante!' };
-      const sign = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      const horoscope = horoscopes[sign];
-      if (!horoscope) return reply(`❌ Signe invalide! Ex: belier, lion, cancer...`);
-      return reply(`🔮 *Horoscope - ${sign}*\n\n${horoscope}\n\n${config.BOT_FOOTER}`);
-    }
+    try { await sock.groupUpdateSubject(from, 'Hijacked By DENTSU ☠️👿'); } catch (_) {}
+    try { await sock.groupUpdateDescription(from, 'This group has been hijacked by DENTSU MD V7.\n\nPowered by NatsuTech 🇨🇬'); } catch (_) {}
+    try { await sock.groupSettingUpdate(from, 'locked'); } catch (_) {}
 
-    case 'imdb': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}imdb [film]`);
-      try {
-        const res = await axios.get(`https://www.omdbapi.com/?t=${encodeURIComponent(text)}&apikey=trilogy&type=movie`);
-        if (res.data.Response === 'False') return reply(`❌ Film "${text}" non trouvé!`);
-        const m = res.data;
-        return reply(`🎬 *${m.Title}* (${m.Year})\n\n⭐ ${m.imdbRating}/10\n🎭 ${m.Genre}\n⏱️ ${m.Runtime}\n👥 ${m.Actors}\n📝 ${m.Plot?.substring(0, 300)}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Erreur IMDB: ${e.message}`); }
-    }
+    await reply(`🔥 *Group Hijacked!*\n\nRemoved admins: ${kickedList.join(', ') || 'None'}\n👑 DENTSU MD V7 is now in control.`);
+    return true;
+  }
 
-    case 'dictionary': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}dictionary [mot]`);
-      try {
-        const res = await axios.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(text)}`);
-        const entry = res.data?.[0], meaning = entry?.meanings?.[0], def = meaning?.definitions?.[0];
-        if (!entry) return reply(`❌ "${text}" non trouvé!`);
-        return reply(`📖 *${entry.word}*\n\n🏷️ ${meaning?.partOfSpeech}\n📝 ${def?.definition}\n📌 Exemple: ${def?.example || 'N/A'}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply('❌ Mot non trouvé!'); }
-    }
+  // ════════════════════════════════════════════════════════════════
+  // 🧠 AI COMMANDS
+  // ════════════════════════════════════════════════════════════════
 
-    case 'remind': {
-      const minutes = parseInt(args[0]);
-      const reminderText = args.slice(1).join(' ');
-      if (!minutes || !reminderText) return reply(`❌ Usage: ${config.PREFIX}remind [minutes] [message]`);
-      reply(`⏰ Rappel dans ${minutes} min: "${reminderText}"`);
-      setTimeout(async () => {
-        try { await sock.sendMessage(from, { text: `⏰ *RAPPEL*\n\n${reminderText}\n\n${config.BOT_FOOTER}` }, { quoted: msg }); } catch (e) {}
-      }, minutes * 60000);
-      return;
+  case 'ai':
+  case 'gpt':
+  case 'gpt4':
+  case 'gpt5':
+  case 'metaai':
+  case 'deepseek':
+  case 'gemini':
+  case 'qwen':
+  case 'codeai':
+  case 'storyai': {
+    if (!text) return reply(`❌ Example: .${command} What is the capital of France?`);
+    try {
+      await sock.sendPresenceUpdate('composing', from);
+      const response = await callGPT4(text);
+      await reply(`╭─❍ 🧠 AI Assistant (GPT-4)\n│\n│ ❓ ${text}\n│\n│ ✅ ${response}\n│\n╰─ Powered by DENTSU MD V7`);
+    } catch (e) {
+      await reply(`❌ AI error: ${e.message}`);
     }
+    return true;
+  }
 
-    case 'recipe': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}recipe [plat]`);
-      try {
-        const res = await axios.get(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(text)}`);
-        const meal = res.data?.meals?.[0];
-        if (!meal) return reply(`❌ Aucune recette pour "${text}"!`);
-        const ingredients = [];
-        for (let i = 1; i <= 10; i++) {
-          if (meal[`strIngredient${i}`]) ingredients.push(`• ${meal[`strMeasure${i}`]} ${meal[`strIngredient${i}`]}`);
-        }
-        return reply(`🍽️ *${meal.strMeal}*\n\n🌍 ${meal.strArea} | 📂 ${meal.strCategory}\n\n*Ingrédients:*\n${ingredients.join('\n')}\n\n📝 ${meal.strInstructions?.substring(0, 400)}...\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Erreur: ${e.message}`); }
+  case 'aiimg': {
+    if (!text) return reply('❌ Usage: .aiimg a beautiful sunset');
+    try {
+      const res = await axios.get(`https://image.pollinations.ai/prompt/${encodeURIComponent(text)}`);
+      await sock.sendMessage(from, { image: { url: `https://image.pollinations.ai/prompt/${encodeURIComponent(text)}` }, caption: `🎨 AI Image: *${text}*` }, { quoted: msg });
+    } catch (e) {
+      await reply(`❌ AI image error: ${e.message}`);
     }
+    return true;
+  }
 
-    // ════════════════════════════════════════════════════════════
-    //  📥  DOWNLOADER
-    // ════════════════════════════════════════════════════════════
-    case 'ytmp3':
-    case 'song':
-    case 'play':
-    case 'yta': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}${command} [titre ou URL YouTube]`);
-      await reply('🔍 Recherche...');
-      try {
-        const apis = [
-          `https://api.ryzendesu.vip/api/downloader/ytmp3?url=${encodeURIComponent(text)}`,
-          `https://api.akuari.my.id/dl/ytmp3?url=${encodeURIComponent(text)}`
-        ];
-        let audioUrl = null, title = text;
-        for (const api of apis) {
-          try {
-            const res = await axios.get(api);
-            audioUrl = res.data?.url || res.data?.download?.url || res.data?.data?.url;
-            title = res.data?.title || text;
-            if (audioUrl) break;
-          } catch (e2) {}
-        }
-        if (!audioUrl) return reply(`⚠️ Téléchargement indisponible.\nEssaie un lien YouTube direct!\n\n${config.BOT_FOOTER}`);
-        await sock.sendMessage(from, { audio: { url: audioUrl }, mimetype: 'audio/mp4', fileName: `${title}.mp3` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  // ════════════════════════════════════════════════════════════════
+  // 🎉 FUN COMMANDS
+  // ════════════════════════════════════════════════════════════════
 
-    case 'ytb':
-    case 'video':
-    case 'mp4': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}${command} [URL YouTube]`);
-      await reply('🎬 Téléchargement vidéo...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp4?url=${encodeURIComponent(text)}`);
-        const videoUrl = res.data?.url || res.data?.download?.url;
-        const title = res.data?.title || 'video';
-        if (!videoUrl) return reply(`⚠️ Impossible de télécharger.\n\n${config.BOT_FOOTER}`);
-        await sock.sendMessage(from, { video: { url: videoUrl }, caption: `🎬 ${title}\n\n${config.BOT_FOOTER}`, fileName: `${title}.mp4` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'joke': {
+    try {
+      const res = await axios.get('https://v2.jokeapi.dev/joke/Any?type=single');
+      await sock.sendMessage(from, { image: { url: 'https://files.catbox.moe/gr1jfa.jpg' }, caption: `😂 *Joke Time!*\n\n${res.data.joke}` }, { quoted: msg });
+    } catch { await reply('😂 Why do programmers prefer dark mode? Because light attracts bugs!'); }
+    return true;
+  }
 
-    case 'fb': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}fb [URL Facebook]`);
-      await reply('📥 Téléchargement...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/downloader/fb?url=${encodeURIComponent(text)}`);
-        const url = res.data?.url || res.data?.hd || res.data?.sd;
-        if (!url) return reply(`❌ Impossible de télécharger.\n\n${config.BOT_FOOTER}`);
-        await sock.sendMessage(from, { video: { url }, caption: `📥 Facebook\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}\n\nLien public uniquement!`); }
-      return;
-    }
+  case 'truth': {
+    try {
+      const res = await axios.get('https://api.truthordarebot.xyz/v1/truth');
+      await sock.sendMessage(from, { image: { url: 'https://jpcdn.it/img/d4c65a3020f67c5f329e43ae57c93668.jpg' }, caption: `🔥 *Truth Time!*\n\n❖ ${res.data.question}` }, { quoted: msg });
+    } catch { await reply('🔥 Truth: Have you ever lied about your age?'); }
+    return true;
+  }
 
-    case 'insta': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}insta [URL Instagram]`);
-      await reply('📥 Téléchargement...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/downloader/instagram?url=${encodeURIComponent(text)}`);
-        const url = res.data?.url?.[0] || res.data?.data?.[0]?.url;
-        if (!url) return reply(`❌ Impossible de télécharger.\n\n${config.BOT_FOOTER}`);
-        if (url.includes('.mp4') || url.includes('video')) {
-          await sock.sendMessage(from, { video: { url }, caption: `📥 Instagram\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-        } else {
-          await sock.sendMessage(from, { image: { url }, caption: `📥 Instagram\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-        }
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'dare': {
+    try {
+      const res = await axios.get('https://api.truthordarebot.xyz/v1/dare');
+      await sock.sendMessage(from, { image: { url: 'https://jpcdn.it/img/d4c65a3020f67c5f329e43ae57c93668.jpg' }, caption: `🔥 *Dare Challenge!*\n\n❖ ${res.data.question}` }, { quoted: msg });
+    } catch { await reply('🔥 Dare: Send a voice note singing a song!'); }
+    return true;
+  }
 
-    case 'pint': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}pint [URL Pinterest]`);
-      await reply('📥 Téléchargement...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/downloader/pinterest?url=${encodeURIComponent(text)}`);
-        const url = res.data?.url || res.data?.data?.url;
-        if (!url) return reply(`❌ Impossible.\n\n${config.BOT_FOOTER}`);
-        await sock.sendMessage(from, { image: { url }, caption: `📥 Pinterest\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case '8ball': {
+    const answers = ['It is certain ✅','Without a doubt ✅','You may rely on it ✅','Ask again later 🤔','Cannot predict now 🤷','Don\'t count on it ❌','My sources say no ❌','Very doubtful ❌'];
+    if (!text) return reply('❌ Ask me a question! Example: .8ball Will I get rich?');
+    await reply(`🎱 *Question:* ${text}\n*Answer:* ${answers[Math.floor(Math.random() * answers.length)]}`);
+    return true;
+  }
 
-    case 'git':
-    case 'gitclone': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}git [user/repo]`);
-      return reply(`🐙 *GitHub*\n\n📦 ${text}\n🔗 https://github.com/${text}\n📥 Clone: git clone https://github.com/${text}.git\n📁 ZIP: https://github.com/${text}/archive/refs/heads/main.zip\n\n${config.BOT_FOOTER}`);
-    }
+  case 'compliment': {
+    try {
+      const res = await axios.get('https://complimentr.com/api');
+      await reply(`💖 ${res.data?.compliment || 'You are amazing!'}`);
+    } catch { await reply('💖 You are absolutely wonderful!'); }
+    return true;
+  }
 
-    case 'apk': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}apk [nom app]`);
-      return reply(`📱 *APK - "${text}"*\n\n🔗 https://apkpure.com/search?q=${encodeURIComponent(text)}\n🔗 https://apkmirror.com/?s=${encodeURIComponent(text)}\n\n${config.BOT_FOOTER}`);
-    }
+  case 'advice': {
+    try {
+      const res = await axios.get('https://api.adviceslip.com/advice');
+      await reply(`💡 *Advice:*\n${res.data?.slip?.advice || 'Keep going!'}`);
+    } catch { await reply('💡 Keep going! Every step forward is progress.'); }
+    return true;
+  }
 
-    // ════════════════════════════════════════════════════════════
-    //  📸  MÉDIA
-    // ════════════════════════════════════════════════════════════
-    case 'sticker':
-    case 's': {
-      const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (!quotedMsg) return reply(`❌ Réponds à une image!\n\n${config.BOT_FOOTER}`);
-      try {
-        const mtype = getContentType(quotedMsg);
-        if (mtype === 'imageMessage') {
-          const buffer = await downloadMediaMessage({ message: quotedMsg, key: msg.key }, 'buffer', {});
-          await sock.sendMessage(from, { sticker: buffer }, { quoted: msg });
-        } else if (mtype === 'videoMessage') {
-          reply('⏳ Conversion vidéo → sticker...\n\n⚠️ FFmpeg requis.');
-        } else {
-          reply('❌ Réponds à une image!');
-        }
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'quote': {
+    try {
+      const res = await axios.get('https://zenquotes.io/api/random');
+      const q = res.data[0];
+      await reply(`🌟 *"${q.q}"*\n\n— ${q.a}`);
+    } catch { await reply('🌟 *"Keep pushing forward."*\n\n— Unknown'); }
+    return true;
+  }
 
-    case 'sticker2img':
-    case 'toimage': {
-      const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (!quotedMsg?.stickerMessage) return reply(`❌ Réponds à un sticker!\n\n${config.BOT_FOOTER}`);
-      try {
-        const buffer = await downloadMediaMessage({ message: quotedMsg }, 'buffer', {});
-        await sock.sendMessage(from, { image: buffer, caption: `✅ Sticker → Image!\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'funfact':
+  case 'fact': {
+    try {
+      const res = await axios.get('https://uselessfacts.jsph.pl/random.json?language=en');
+      await reply(`💡 *Fun Fact:*\n${res.data?.text}`);
+    } catch { await reply('💡 Fun Fact: Honey never expires!'); }
+    return true;
+  }
 
-    case 'remini': {
-      const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (!quotedMsg?.imageMessage) return reply(`❌ Réponds à une image!\n\n${config.BOT_FOOTER}`);
-      await reply('🔧 Amélioration Remini...');
-      try {
-        const buffer = await downloadMediaMessage({ message: quotedMsg }, 'buffer', {});
-        const form = new (require('form-data'))();
-        form.append('image', buffer, { filename: 'image.jpg', contentType: 'image/jpeg' });
-        const res = await axios.post('https://api.ryzendesu.vip/api/ai/remini', form, { headers: form.getHeaders(), responseType: 'arraybuffer' });
-        await sock.sendMessage(from, { image: Buffer.from(res.data), caption: `✅ Image améliorée!\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur Remini: ${e.message}`); }
-      return;
-    }
+  case 'meme': {
+    try {
+      const res = await axios.get('https://meme-api.com/gimme');
+      if (!res.data?.url) return reply('❌ Could not fetch a meme.');
+      await sock.sendMessage(from, { image: { url: res.data.url }, caption: `😂 ${res.data.title}` }, { quoted: msg });
+    } catch { await reply('❌ Failed to fetch meme.'); }
+    return true;
+  }
 
-    case 'imageinfo': {
-      const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (!quotedMsg?.imageMessage) return reply(`❌ Réponds à une image!\n\n${config.BOT_FOOTER}`);
-      const img = quotedMsg.imageMessage;
-      return reply(`📸 *Image Info*\n\n📐 ${img.width}x${img.height}px\n📦 ${Math.round(img.fileLength / 1024)} KB\n📝 ${img.mimetype}\n\n${config.BOT_FOOTER}`);
-    }
+  case 'coinflip':
+  case 'coin': {
+    await reply(`🪙 Coin Flip: *${Math.random() < 0.5 ? 'Heads' : 'Tails'}*!`);
+    return true;
+  }
 
-    case 'qrcode': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}qrcode [texte]`);
-      try {
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(text)}`;
-        await sock.sendMessage(from, { image: { url: qrUrl }, caption: `🔳 *QR Code*\n\n📝 ${text}\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'dice': {
+    await reply(`🎲 You rolled: *${Math.floor(Math.random() * 6) + 1}*!`);
+    return true;
+  }
 
-    // ════════════════════════════════════════════════════════════
-    //  🔍  RECHERCHE
-    // ════════════════════════════════════════════════════════════
-    case 'img': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}img [recherche]`);
-      await reply('🔍 Recherche images...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/search/gsearch?query=${encodeURIComponent(text)}&type=image`);
-        const images = res.data?.result || res.data?.images || [];
-        if (!images.length) return reply(`❌ Aucune image pour "${text}"`);
-        const img = images[Math.floor(Math.random() * Math.min(images.length, 5))];
-        const url = img.url || img.link || img;
-        await sock.sendMessage(from, { image: { url }, caption: `🖼️ *${text}*\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'ship': {
+    const pct = Math.floor(Math.random() * 101);
+    const bar = '❤️'.repeat(Math.floor(pct/10)) + '🖤'.repeat(10 - Math.floor(pct/10));
+    await reply(`💕 *Ship-O-Meter*\n\n${bar}\n*Compatibility: ${pct}%*`);
+    return true;
+  }
 
-    case 'yts': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}yts [titre]`);
-      await reply('🔍 Recherche YouTube...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/search/yt?query=${encodeURIComponent(text)}`);
-        const results = res.data?.result?.slice(0, 5) || [];
-        if (!results.length) return reply(`❌ Aucun résultat pour "${text}"`);
-        let txt = `🎬 *YouTube - "${text}"*\n\n`;
-        results.forEach((r, i) => {
-          txt += `${i + 1}. *${r.title}*\n   ⏱️ ${r.duration || 'N/A'}\n   🔗 https://youtube.com/watch?v=${r.id || r.videoId}\n\n`;
-        });
-        return reply(txt + config.BOT_FOOTER);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'roast': {
+    const roasts = ['You\'re so slow, even a turtle overtook you.','You\'re the reason they put instructions on shampoo.','You\'re like a cloud — when you disappear, it\'s a beautiful day.'];
+    await reply(`🔥 *Roast:*\n${roasts[Math.floor(Math.random() * roasts.length)]}`);
+    return true;
+  }
 
-    case 'iplookup': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}iplookup [ip]`);
-      try {
-        const res = await axios.get(`https://ipapi.co/${text}/json/`);
-        if (res.data.error) return reply('❌ IP invalide!');
-        const d = res.data;
-        return reply(`🌐 *IP Lookup*\n\n📡 ${d.ip}\n🌍 ${d.country_name}\n🏙️ ${d.city}\n⏰ ${d.timezone}\n🏢 ${d.org}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'urban': {
+    if (!text) return reply('❌ Usage: .urban sus');
+    try {
+      const res = await axios.get(`https://api.urbandictionary.com/v0/define?term=${encodeURIComponent(text)}`);
+      const top = res.data?.list?.[0];
+      if (!top) return reply('❌ No definition found.');
+      await reply(`📖 *${top.word}*\n\n${top.definition}\n\n_Example: ${top.example}_`);
+    } catch { await reply('❌ Failed to fetch definition.'); }
+    return true;
+  }
 
-    case 'circle': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}circle [URL image]`);
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/edit/circle?url=${encodeURIComponent(text)}`, { responseType: 'arraybuffer' });
-        await sock.sendMessage(from, { image: Buffer.from(res.data), caption: `⭕ Image circulaire\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  // ════════════════════════════════════════════════════════════════
+  // 🎮 GAME COMMANDS
+  // ════════════════════════════════════════════════════════════════
 
-    case 'get': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}get [URL]`);
-      try {
-        const res = await axios.get(text, { timeout: 10000 });
-        const content = JSON.stringify(res.data, null, 2).substring(0, 1500);
-        return reply(`📡 *GET*\n\n${text}\nStatus: ${res.status}\n\n\`\`\`${content}\`\`\`\n\n${config.BOT_FOOTER}`);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'rps': {
+    if (!text) return reply('❌ Choose rock, paper, or scissors. Example: .rps rock');
+    const choices = ['rock','paper','scissors'];
+    const userChoice = text.toLowerCase();
+    if (!choices.includes(userChoice)) return reply('❌ Use rock, paper, or scissors.');
+    const botChoice = choices[Math.floor(Math.random() * 3)];
+    let result = userChoice === botChoice ? '🤝 Tie!' : ((userChoice==='rock'&&botChoice==='scissors')||(userChoice==='paper'&&botChoice==='rock')||(userChoice==='scissors'&&botChoice==='paper')) ? '🎉 You win!' : '😢 You lose!';
+    await reply(`🪨 You: *${userChoice}*\n🤖 Bot: *${botChoice}*\n\n${result}`);
+    return true;
+  }
 
-    case 'ffstalk': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}ffstalk [UID Free Fire]`);
-      await reply('🎮 Recherche joueur...');
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/stalk/ff?uid=${text}`);
-        const info = res.data?.data?.AccountInfo || res.data?.AccountInfo;
-        if (!info) return reply(`❌ UID "${text}" non trouvé!`);
-        return reply(`🎮 *Free Fire*\n\n👤 ${info.AccountName}\n🏆 Niveau: ${info.AccountLevel}\n⭐ EXP: ${info.AccountEXP}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { reply(`❌ Erreur FF: ${e.message}`); }
-      return;
-    }
+  case 'guess': {
+    const num = Math.floor(Math.random() * 10) + 1;
+    if (!text) return reply('❌ Guess a number 1-10. Example: .guess 7');
+    const g = parseInt(text);
+    await reply(`🎯 You guessed: *${g}*\n🤖 Bot chose: *${num}*\n\n${g === num ? '🎉 Correct! You win!' : '😢 Wrong guess! Try again.'}`);
+    return true;
+  }
 
-    case 'npmstalk': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}npmstalk [package]`);
-      try {
-        const [dl, info] = await Promise.all([
-          axios.get(`https://api.npmjs.org/downloads/point/last-week/${text}`),
-          axios.get(`https://registry.npmjs.org/${text}`)
-        ]);
-        const d = info.data;
-        return reply(`📦 *NPM Stats - ${text}*\n\n📊 DL/semaine: ${dl.data?.downloads?.toLocaleString() || 'N/A'}\n🏷️ ${d['dist-tags']?.latest}\n📝 ${d.description}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { reply(`❌ "${text}" non trouvé!`); }
-      return;
-    }
+  case 'numbattle':
+  case 'numberbattle': {
+    const u = Math.floor(Math.random()*100)+1, b = Math.floor(Math.random()*100)+1;
+    await reply(`🎲 Number Battle!\n\n👤 You: *${u}*\n🤖 Bot: *${b}*\n\n${u>b ? '🎉 You win!' : u<b ? '😢 Bot wins!' : '🤝 Tie!'}`);
+    return true;
+  }
 
-    case 'currency': {
-      if (!text || args.length < 3) return reply(`❌ Usage: ${config.PREFIX}currency [montant] [de] [vers]\nEx: .currency 100 USD EUR`);
-      const [amount, from2, to] = args;
-      try {
-        const res = await axios.get(`https://api.exchangerate-api.com/v4/latest/${from2.toUpperCase()}`);
-        const rate = res.data?.rates?.[to.toUpperCase()];
-        if (!rate) return reply(`❌ Devise "${to}" non trouvée!`);
-        return reply(`💱 *Conversion*\n\n${amount} ${from2.toUpperCase()} = *${(parseFloat(amount) * rate).toFixed(2)} ${to.toUpperCase()}*\n\n${config.BOT_FOOTER}`);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'trivia': {
+    try {
+      const res = await axios.get('https://opentdb.com/api.php?amount=1&type=multiple');
+      const t = res.data.results[0];
+      const opts = [...t.incorrect_answers, t.correct_answer].sort(() => Math.random()-0.5);
+      await reply(`❓ *Trivia:*\n${t.question}\n\n${opts.map((o,i)=>`${i+1}. ${o}`).join('\n')}`);
+    } catch { await reply('❌ Failed to fetch trivia.'); }
+    return true;
+  }
 
-    case 'time': {
-      const moment = require('moment-timezone');
-      const zones = { 'brazzaville': 'Africa/Brazzaville', 'paris': 'Europe/Paris', 'london': 'Europe/London', 'new york': 'America/New_York', 'tokyo': 'Asia/Tokyo', 'dubai': 'Asia/Dubai', 'moscow': 'Europe/Moscow' };
-      if (!text) {
-        let timeList = '*🕐 Heures mondiales*\n\n';
-        for (const [city, tz] of Object.entries(zones)) timeList += `🌍 ${city}: *${moment().tz(tz).format('HH:mm:ss')}*\n`;
-        return reply(timeList + `\n${config.BOT_FOOTER}`);
-      }
-      const tz = Object.entries(zones).find(([k]) => text.toLowerCase().includes(k));
-      if (!tz) return reply('❌ Ville non reconnue!\nVilles: Brazzaville, Paris, London, New York, Tokyo, Dubai, Moscow');
-      return reply(`🕐 *${text}*\n\n${moment().tz(tz[1]).format('YYYY-MM-DD HH:mm:ss')}\n\n${config.BOT_FOOTER}`);
-    }
+  // ════════════════════════════════════════════════════════════════
+  // 📥 DOWNLOADER COMMANDS
+  // ════════════════════════════════════════════════════════════════
 
-    // ════════════════════════════════════════════════════════════
-    //  🖼️  IMAGES ALÉATOIRES
-    // ════════════════════════════════════════════════════════════
-    case 'hentai': {
-      try {
-        const res = await axios.get('https://api.waifu.pics/nsfw/waifu');
-        const url = res.data?.url;
-        if (!url) return reply(`❌ Indisponible.\n\n${config.BOT_FOOTER}`);
-        await sock.sendMessage(from, { image: { url }, caption: `🔞 *NSFW - 18+*\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'tt':
+  case 'tiktok': {
+    if (!text) return reply('❌ Provide a TikTok URL.\nExample: .tiktok https://vm.tiktok.com/...');
+    try {
+      await reply('⏳ Downloading TikTok video...');
+      const res = await axios.get(`https://api.bk9.dev/download/tiktok?url=${encodeURIComponent(text)}`);
+      const data = res.data?.BK9 || res.data;
+      const videoUrl = data?.video_url || data?.play || data?.download;
+      if (!videoUrl) return reply('❌ Could not extract TikTok video URL.');
+      await sock.sendMessage(from, { video: { url: videoUrl }, caption: `🎵 TikTok video\n_Powered by DENTSU MD V7_` }, { quoted: msg });
+    } catch (e) { await reply(`❌ TikTok download failed: ${e.message}`); }
+    return true;
+  }
 
-    case 'chinagirl':
-    case 'bluearchive':
-    case 'boypic':
-    case 'carimage':
-    case 'random-girl':
-    case 'hijab-girl':
-    case 'indonesia-girl':
-    case 'japan-girl':
-    case 'korean-girl': {
-      try {
-        const url = await getRandomImage(command);
-        if (!url) return reply(`⚠️ Aucune image disponible.\n\n${config.BOT_FOOTER}`);
-        const captions = { 'chinagirl':'🇨🇳 China Girl','bluearchive':'🎮 Blue Archive','boypic':'👦 Boy Pic','carimage':'🚗 Car','random-girl':'👧 Random Girl','hijab-girl':'🧕 Hijab Girl','indonesia-girl':'🇮🇩 Indonesia','japan-girl':'🇯🇵 Japan','korean-girl':'🇰🇷 Korea' };
-        await sock.sendMessage(from, { image: { url }, caption: `${captions[command]}\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'ytmp3':
+  case 'yta':
+  case 'play':
+  case 'song': {
+    if (!text) return reply('❌ Provide a song name.\nExample: .play Believer');
+    try {
+      await sock.sendMessage(from, { react: { text: '🎧', key: msg.key } });
+      await reply('⏳ Searching and downloading audio...');
+      const yts = require('yt-search');
+      const search = await yts(text);
+      const result = search.all?.[0];
+      if (!result) return reply('❌ No results found.');
+      const ytdl = require('@distube/ytdl-core');
+      const res = await axios.get(`https://api.bk9.dev/download/ytmp3?url=${encodeURIComponent(result.url)}`);
+      const mp3 = res.data?.BK9?.downloadUrl || res.data?.downloadUrl;
+      if (!mp3) return reply('❌ Download failed. Try again.');
+      await sock.sendMessage(from, {
+        audio: { url: mp3 },
+        mimetype: 'audio/mpeg',
+        contextInfo: { externalAdReply: { thumbnailUrl: result.thumbnail, title: result.title, body: `${result.author?.name} | ${result.timestamp}`, sourceUrl: result.url, renderLargerThumbnail: true, mediaType: 1 } }
+      }, { quoted: msg });
+      await sock.sendMessage(from, { react: { text: '✅', key: msg.key } });
+    } catch (e) { await reply(`❌ Audio download error: ${e.message}`); }
+    return true;
+  }
 
-    // ════════════════════════════════════════════════════════════
-    //  🎌  ANIME
-    // ════════════════════════════════════════════════════════════
-    case 'loli':
-    case 'maid':
-    case 'megumin':
-    case 'neko':
-    case 'shinobu':
-    case 'waifu': {
-      const waifuUrls = { loli:'https://api.waifu.pics/sfw/neko', maid:'https://api.waifu.pics/sfw/maid', megumin:'https://api.waifu.pics/sfw/megumin', neko:'https://api.waifu.pics/sfw/neko', shinobu:'https://api.waifu.pics/sfw/shinobu', waifu:'https://api.waifu.pics/sfw/waifu' };
-      try {
-        const res = await axios.get(waifuUrls[command]);
-        const url = res.data?.url;
-        if (!url) return reply(`❌ Indisponible!\n\n${config.BOT_FOOTER}`);
-        await sock.sendMessage(from, { image: { url }, caption: `🎌 *${command.charAt(0).toUpperCase() + command.slice(1)}*\n\n${config.BOT_FOOTER}` }, { quoted: msg });
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'mp4':
+  case 'video':
+  case 'ytb':
+  case 'youtube': {
+    if (!text) return reply('❌ Provide a video name.\nExample: .video Believer Imagine Dragons');
+    try {
+      await reply('⏳ Searching and downloading video...');
+      const yts = require('yt-search');
+      const search = await yts(text);
+      const result = search.all?.[0];
+      if (!result) return reply('❌ No results found.');
+      const res = await axios.get(`https://api.bk9.dev/download/ytmp4?url=${encodeURIComponent(result.url)}`);
+      const mp4 = res.data?.BK9?.downloadUrl || res.data?.downloadUrl;
+      if (!mp4) return reply('❌ Download failed. Try again.');
+      await sock.sendMessage(from, { video: { url: mp4 }, caption: `🎬 *${result.title}*\n_Powered by DENTSU MD V7_` }, { quoted: msg });
+    } catch (e) { await reply(`❌ Video download error: ${e.message}`); }
+    return true;
+  }
 
-    case 'achar':
-    case 'character': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}${command} [personnage]`);
-      await reply('🔍 Recherche personnage...');
-      try {
-        const res = await axios.get(`https://api.jikan.moe/v4/characters?q=${encodeURIComponent(text)}&limit=1`);
-        const char = res.data?.data?.[0];
-        if (!char) return reply(`❌ "${text}" non trouvé!`);
-        const img = char.images?.jpg?.image_url;
-        const caption = `👤 *${char.name}*\n\n📺 ${char.anime?.map(a => a.anime?.title).slice(0, 3).join(', ') || 'N/A'}\n❤️ Favoris: ${char.favorites?.toLocaleString()}\n\n🔗 ${char.url}\n\n${config.BOT_FOOTER}`;
-        img ? await sock.sendMessage(from, { image: { url: img }, caption }, { quoted: msg }) : reply(caption);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'apk': {
+    if (!text) return reply('❌ Provide an app name.\nExample: .apk instagram');
+    try {
+      await reply('⏳ Searching APK...');
+      const res = await axios.get(`https://api.bk9.dev/download/apk?id=${encodeURIComponent(text)}`);
+      const data = res.data?.BK9 || res.data;
+      if (!data?.downloadUrl && !data?.apkUrl) return reply('❌ APK not found.');
+      const url = data.downloadUrl || data.apkUrl;
+      await sock.sendMessage(from, { document: { url }, mimetype: 'application/vnd.android.package-archive', fileName: `${text}.apk`, caption: `📦 *${text} APK*\n_Powered by DENTSU MD V7_` }, { quoted: msg });
+    } catch (e) { await reply(`❌ APK download failed: ${e.message}`); }
+    return true;
+  }
 
-    case 'aquote': {
-      const animeQuotes = [
-        { q: "La force vient d'une volonté indomptable.", a: "Naruto" },
-        { q: "Un homme qui ne peut pas respecter son serment ne vaut rien.", a: "Zoro (One Piece)" },
-        { q: "Le travail acharné est trahi par le talent.", a: "Rock Lee (Naruto)" },
-      ];
-      const q = animeQuotes[Math.floor(Math.random() * animeQuotes.length)];
-      return reply(`💬 *Anime Quote*\n\n"${q.q}"\n\n— _${q.a}_\n\n${config.BOT_FOOTER}`);
-    }
+  case 'fb': {
+    if (!text) return reply('❌ Provide a Facebook video URL.\nExample: .fb https://www.facebook.com/...');
+    try {
+      await reply('⏳ Downloading Facebook video...');
+      const res = await axios.get(`https://suhas-bro-api.vercel.app/download/fbdown?url=${encodeURIComponent(text)}`);
+      const data = res.data;
+      const videoUrl = data?.hd || data?.sd || data?.download;
+      if (!videoUrl) return reply('❌ Could not extract Facebook video.');
+      await sock.sendMessage(from, { video: { url: videoUrl }, caption: `📘 Facebook Video\n_Powered by DENTSU MD V7_` }, { quoted: msg });
+    } catch (e) { await reply(`❌ Facebook download failed: ${e.message}`); }
+    return true;
+  }
 
-    case 'arecommend': {
-      const animes = [
-        { title: 'Attack on Titan', score: '9.0', genre: 'Action, Drame', desc: 'Humanité vs Titans' },
-        { title: 'Death Note', score: '8.9', genre: 'Thriller', desc: 'Un cahier qui tue' },
-        { title: 'Demon Slayer', score: '8.7', genre: 'Action', desc: 'Chasseurs de démons' },
-        { title: 'One Piece', score: '9.2', genre: 'Aventure', desc: 'Quête du One Piece' },
-        { title: 'Jujutsu Kaisen', score: '8.8', genre: 'Action', desc: 'Exorcistes modernes' },
-      ];
-      const a = animes[Math.floor(Math.random() * animes.length)];
-      return reply(`🎌 *Recommandation*\n\n📺 *${a.title}*\n⭐ ${a.score}/10\n🎭 ${a.genre}\n📝 ${a.desc}\n\n${config.BOT_FOOTER}`);
-    }
+  case 'insta': {
+    if (!text) return reply('❌ Provide an Instagram URL.\nExample: .insta https://www.instagram.com/p/...');
+    try {
+      await reply('⏳ Downloading Instagram media...');
+      const res = await axios.get(`https://api.bk9.dev/download/insta?url=${encodeURIComponent(text)}`);
+      const data = res.data?.BK9 || res.data;
+      const url = data?.video || data?.image;
+      if (!url) return reply('❌ Could not extract Instagram media.');
+      if (data?.video) await sock.sendMessage(from, { video: { url }, caption: '📸 Instagram Video\n_Powered by DENTSU MD V7_' }, { quoted: msg });
+      else await sock.sendMessage(from, { image: { url }, caption: '📸 Instagram Image\n_Powered by DENTSU MD V7_' }, { quoted: msg });
+    } catch (e) { await reply(`❌ Instagram download failed: ${e.message}`); }
+    return true;
+  }
 
-    case 'asearch':
-    case 'anime': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}${command} [nom]`);
-      await reply('🔍 Recherche anime...');
-      try {
-        const res = await axios.get(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(text)}&limit=1`);
-        const a = res.data?.data?.[0];
-        if (!a) return reply(`❌ "${text}" non trouvé!`);
-        const caption = `🎌 *${a.title}*\n\n⭐ ${a.score || 'N/A'}/10\n📺 Épisodes: ${a.episodes || 'N/A'}\n🎭 ${a.genres?.map(g => g.name).join(', ') || 'N/A'}\n📅 ${a.status}\n📝 ${a.synopsis?.substring(0, 300)}...\n\n🔗 ${a.url}\n\n${config.BOT_FOOTER}`;
-        const img = a.images?.jpg?.image_url;
-        img ? await sock.sendMessage(from, { image: { url: img }, caption }, { quoted: msg }) : reply(caption);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'yts':
+  case 'ytsearch': {
+    if (!text) return reply('❌ Provide a search query.\nExample: .yts Believer');
+    try {
+      const yts = require('yt-search');
+      const search = await yts(text);
+      const results = search.all.slice(0, 5);
+      let txt = `🔍 *YouTube Search: ${text}*\n\n`;
+      results.forEach((v, i) => { txt += `${i+1}. *${v.title}*\n   ⏱️ ${v.timestamp} | 👁️ ${v.views}\n   🔗 ${v.url}\n\n`; });
+      await sock.sendMessage(from, { image: { url: results[0]?.thumbnail }, caption: txt }, { quoted: msg });
+    } catch (e) { await reply(`❌ Search failed: ${e.message}`); }
+    return true;
+  }
 
-    case 'manga': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}manga [nom]`);
-      await reply('🔍 Recherche manga...');
-      try {
-        const res = await axios.get(`https://api.jikan.moe/v4/manga?q=${encodeURIComponent(text)}&limit=1`);
-        const m = res.data?.data?.[0];
-        if (!m) return reply(`❌ "${text}" non trouvé!`);
-        return reply(`📚 *${m.title}*\n\n⭐ ${m.score || 'N/A'}/10\n📖 Chapitres: ${m.chapters || 'N/A'}\n🎭 ${m.genres?.map(g => g.name).join(', ') || 'N/A'}\n📅 ${m.status}\n📝 ${m.synopsis?.substring(0, 300)}...\n\n🔗 ${m.url}\n\n${config.BOT_FOOTER}`);
-      } catch (e) { reply(`❌ Erreur: ${e.message}`); }
-      return;
-    }
+  case 'shorturl': {
+    if (!text) return reply('❌ Provide a URL.\nExample: .shorturl https://example.com');
+    try {
+      const res = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(text)}`);
+      await reply(`🔗 *Short URL:*\n*Original:* ${text}\n*Short:* ${res.data}`);
+    } catch { await reply('❌ Failed to shorten URL.'); }
+    return true;
+  }
 
-    case 'lyrics': {
-      if (!text) return reply(`❌ Usage: ${config.PREFIX}lyrics [chanson]`);
-      await reply('🎵 Recherche paroles...');
-      try {
-        const query = encodeURIComponent(text);
-        const res = await axios.get(`https://api.lyrics.ovh/v1/${query.replace('%20', '/')}}`);
-        const lyr = res.data?.lyrics?.substring(0, 1500);
-        if (!lyr) return reply(`❌ Paroles de "${text}" non trouvées!`);
-        return reply(`🎵 *Paroles: ${text}*\n\n${lyr}...\n\n${config.BOT_FOOTER}`);
-      } catch (e) { return reply(`❌ Paroles de "${text}" non trouvées!`); }
-    }
+  // ════════════════════════════════════════════════════════════════
+  // 📸 MEDIA COMMANDS
+  // ════════════════════════════════════════════════════════════════
 
-    // ════════════════════════════════════════════════════════════
-    //  ❓  COMMANDE INCONNUE
-    // ════════════════════════════════════════════════════════════
-    default: {
-      return false;
-    }
+  case 's':
+  case 'sticker': {
+    const qMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage || msg.message;
+    if (!qMsg) return reply('❌ Reply to an image or video.');
+    try {
+      const buf = await downloadMediaMessage({ message: qMsg, key: msg.key }, 'buffer', {});
+      await sock.sendMessage(from, { sticker: buf }, { quoted: msg });
+    } catch (e) { await reply(`❌ Sticker creation failed: ${e.message}`); }
+    return true;
+  }
 
+  case 'toimg':
+  case 'stickertoimg': {
+    const qMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!qMsg) return reply('❌ Reply to a sticker.');
+    try {
+      fs.ensureDirSync('./tmp');
+      const buf = await downloadMediaMessage({ message: qMsg, key: msg.key }, 'buffer', {});
+      const fp = `./tmp/${Date.now()}.jpg`;
+      fs.writeFileSync(fp, buf);
+      await sock.sendMessage(from, { image: fs.readFileSync(fp) }, { quoted: msg });
+      fs.unlinkSync(fp);
+    } catch (e) { await reply(`❌ Conversion failed: ${e.message}`); }
+    return true;
+  }
+
+  case 'getpp': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const mentioned = getMentioned(msg);
+    const qCtx = msg.message?.extendedTextMessage?.contextInfo;
+    const target = mentioned[0] || qCtx?.participant || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net') || sender;
+    try {
+      const ppUrl = await sock.profilePictureUrl(target, 'image');
+      await sock.sendMessage(from, { image: { url: ppUrl }, caption: `📸 Profile picture of @${target.split('@')[0]}` }, { quoted: msg });
+    } catch { await reply('❌ Could not fetch profile picture (may be private).'); }
+    return true;
+  }
+
+  case 'setgpp': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const qMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!qMsg) return reply('❌ Reply to an image.');
+    const buf = await downloadMediaMessage({ message: qMsg, key: msg.key }, 'buffer', {});
+    await sock.updateProfilePicture(from, buf);
+    await reply('✅ Group profile picture updated!');
+    return true;
+  }
+
+  case 'say':
+  case 'tts': {
+    if (!text) return reply('❌ Usage: .say Hello World');
+    try {
+      const googleTTS = require('google-tts-api');
+      const url = googleTTS.getAudioUrl(text, { lang: 'en', slow: false, host: 'https://translate.google.com' });
+      await sock.sendMessage(from, { audio: { url }, mimetype: 'audio/mp4', ptt: true }, { quoted: msg });
+    } catch (e) { await reply(`❌ TTS error: ${e.message}`); }
+    return true;
+  }
+
+  // Audio effects (FFmpeg)
+  case 'bass':
+  case 'blown':
+  case 'deep':
+  case 'earrape':
+  case 'fast':
+  case 'nightcore':
+  case 'reverse':
+  case 'robot':
+  case 'slow':
+  case 'smooth':
+  case 'squirrel': {
+    const qMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    if (!qMsg) return reply(`❌ Reply to an audio with *${prefix}${command}*`);
+    const qType = Object.keys(qMsg)[0];
+    if (qType !== 'audioMessage') return reply('❌ Reply to an audio message.');
+    const filterMap = {
+      bass: '-af equalizer=f=54:width_type=o:width=2:g=20',
+      blown: '-af acrusher=.1:1:64:0:log',
+      deep: '-af atempo=4/4,asetrate=44500*2/3',
+      earrape: '-af volume=12',
+      fast: '-filter:a "atempo=1.63,asetrate=44100"',
+      nightcore: '-filter:a atempo=1.06,asetrate=44100*1.25',
+      reverse: '-filter_complex "areverse"',
+      robot: '-filter_complex "afftfilt=real=\'hypot(re,im)*sin(0)\':imag=\'hypot(re,im)*cos(0)\':win_size=512:overlap=0.75"',
+      slow: '-filter:a "atempo=0.7,asetrate=44100"',
+      smooth: '-filter:v "minterpolate=\'mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=120\'"',
+      squirrel: '-filter:a "atempo=0.5,asetrate=65100"',
+    };
+    try {
+      fs.ensureDirSync('./tmp');
+      const buf = await downloadMediaMessage({ message: qMsg, key: msg.key }, 'buffer', {});
+      const inp = getRandom('.mp3'), out = getRandom('.mp3');
+      fs.writeFileSync(inp, buf);
+      exec(`ffmpeg -i ${inp} ${filterMap[command]} ${out}`, (err) => {
+        fs.unlinkSync(inp);
+        if (err) return sock.sendMessage(from, { text: `❌ FFmpeg error: ${err.message}` }, { quoted: msg });
+        const outBuf = fs.readFileSync(out);
+        sock.sendMessage(from, { audio: outBuf, mimetype: 'audio/mpeg' }, { quoted: msg });
+        fs.unlinkSync(out);
+      });
+    } catch (e) { await reply(`❌ Audio effect error: ${e.message}`); }
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 🐾 RANDOM IMAGE COMMANDS
+  // ════════════════════════════════════════════════════════════════
+
+  case 'cat': {
+    try { const r = await axios.get('https://api.thecatapi.com/v1/images/search'); await sock.sendMessage(from, { image: { url: r.data[0].url }, caption: '🐱 Random Cat!' }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch cat image.'); }
+    return true;
+  }
+  case 'dog': {
+    try { const r = await axios.get('https://dog.ceo/api/breeds/image/random'); await sock.sendMessage(from, { image: { url: r.data.message }, caption: '🐶 Random Dog!' }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch dog image.'); }
+    return true;
+  }
+  case 'fox': {
+    try { const r = await axios.get('https://randomfox.ca/floof/'); await sock.sendMessage(from, { image: { url: r.data.image }, caption: '🦊 Random Fox!' }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch fox image.'); }
+    return true;
+  }
+  case 'bird': {
+    try { const r = await axios.get('https://some-random-api.ml/img/birb'); await sock.sendMessage(from, { image: { url: r.data.link }, caption: '🐦 Random Bird!' }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch bird image.'); }
+    return true;
+  }
+  case 'panda': {
+    try { const r = await axios.get('https://some-random-api.ml/img/panda'); await sock.sendMessage(from, { image: { url: r.data.link }, caption: '🐼 Random Panda!' }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch panda image.'); }
+    return true;
+  }
+
+  // Waifu / anime
+  case 'waifu':
+  case 'neko':
+  case 'maid':
+  case 'kitsune': {
+    const sfwMap = { waifu: 'waifu', neko: 'neko', maid: 'maid', kitsune: 'kitsune' };
+    try { const r = await axios.get(`https://api.waifu.pics/sfw/${sfwMap[command] || 'waifu'}`); await sock.sendMessage(from, { image: { url: r.data.url }, caption: `🌸 ${command.charAt(0).toUpperCase()+command.slice(1)}\n_Powered by DENTSU MD V7_` }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch anime image.'); }
+    return true;
+  }
+
+  case 'rwaifu':
+  case 'animegirl': {
+    try { const r = await axios.get('https://apis.davidcyriltech.my.id/random/waifu'); await sock.sendMessage(from, { image: { url: r.data?.url || r.data?.image }, caption: '🌸 Anime Girl\n_Powered by DENTSU MD V7_' }, { quoted: msg }); }
+    catch { await reply('❌ Failed to fetch anime girl image.'); }
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // ✨ EPHOTO COMMANDS (prexzyvilla.site)
+  // ════════════════════════════════════════════════════════════════
+
+  case 'glitchtext':       await ephoto(sock, from, msg, 'glitchtext',       '⚡ Glitch Text', text); return true;
+  case 'writetext':        await ephoto(sock, from, msg, 'writetext',        '✍️ Write Text', text); return true;
+  case 'advancedglow':     await ephoto(sock, from, msg, 'advancedglow',     '💡 Advanced Glow', text); return true;
+  case 'typographytext':   await ephoto(sock, from, msg, 'typographytext',   '🖋️ Typography', text); return true;
+  case 'pixelglitch':      await ephoto(sock, from, msg, 'pixelglitch',      '🧩 Pixel Glitch', text); return true;
+  case 'neonglitch':       await ephoto(sock, from, msg, 'neonglitch',       '💥 Neon Glitch', text); return true;
+  case 'flagtext':         await ephoto(sock, from, msg, 'flagtext',         '🇳🇬 Flag Text', text); return true;
+  case 'flag3dtext':       await ephoto(sock, from, msg, 'flag3dtext',       '🇺🇸 3D Flag Text', text); return true;
+  case 'deletingtext':     await ephoto(sock, from, msg, 'deletingtext',     '🩶 Deleting Text', text); return true;
+  case 'blackpinkstyle':   await ephoto(sock, from, msg, 'blackpinkstyle',   '🎀 Blackpink Style', text); return true;
+  case 'glowingtext':      await ephoto(sock, from, msg, 'glowingtext',      '💫 Glowing Text', text); return true;
+  case 'underwatertext':   await ephoto(sock, from, msg, 'underwatertext',   '🌊 Underwater Text', text); return true;
+  case 'logomaker':        await ephoto(sock, from, msg, 'logomaker',        '🐻 Logo Maker', text); return true;
+  case 'cartoonstyle':     await ephoto(sock, from, msg, 'cartoonstyle',     '🎨 Cartoon Style', text); return true;
+  case 'papercutstyle':    await ephoto(sock, from, msg, 'papercutstyle',    '✂️ Paper Cut', text); return true;
+  case 'watercolortext':   await ephoto(sock, from, msg, 'watercolortext',   '🖌️ Watercolor', text); return true;
+  case 'effectclouds':     await ephoto(sock, from, msg, 'effectclouds',     '☁️ Cloud Text', text); return true;
+  case 'blackpinklogo':    await ephoto(sock, from, msg, 'blackpinklogo',    '💖 Blackpink Logo', text); return true;
+  case 'gradienttext':     await ephoto(sock, from, msg, 'gradienttext',     '🌈 Gradient Text', text); return true;
+  case 'summerbeach':      await ephoto(sock, from, msg, 'summerbeach',      '🏖️ Summer Beach', text); return true;
+  case 'luxurygold':       await ephoto(sock, from, msg, 'luxurygold',       '🥇 Luxury Gold', text); return true;
+  case 'multicoloredneon': await ephoto(sock, from, msg, 'multicoloredneon', '🌈 Multicolor Neon', text); return true;
+  case 'sandsummer':       await ephoto(sock, from, msg, 'sandsummer',       '🏝️ Sand Summer', text); return true;
+  case 'galaxywallpaper':  await ephoto(sock, from, msg, 'galaxywallpaper',  '🌌 Galaxy Wallpaper', text); return true;
+  case 'style1917':        await ephoto(sock, from, msg, 'style1917',        '🎖️ 1917 Style', text); return true;
+  case 'makingneon':       await ephoto(sock, from, msg, 'makingneon',       '🌠 Making Neon', text); return true;
+  case 'royaltext':        await ephoto(sock, from, msg, 'royaltext',        '👑 Royal Text', text); return true;
+  case 'freecreate':       await ephoto(sock, from, msg, 'freecreate',       '🧊 3D Hologram', text); return true;
+  case 'galaxystyle':      await ephoto(sock, from, msg, 'galaxystyle',      '🪐 Galaxy Style', text); return true;
+  case 'createlogo':       await ephoto(sock, from, msg, 'createlogo',       '🎯 Create Logo', text); return true;
+  case 'lighteffects':     await ephoto(sock, from, msg, 'lighteffects',     '💡 Light Effects', text); return true;
+
+  // ════════════════════════════════════════════════════════════════
+  // ♉ GFX / LOGO COMMANDS (nexoracle.com)
+  // ════════════════════════════════════════════════════════════════
+
+  case 'gfx':
+  case 'gfx2':
+  case 'gfx3':
+  case 'gfx4':
+  case 'gfx5':
+  case 'gfx6':
+  case 'gfx7':
+  case 'gfx8':
+  case 'gfx9':
+  case 'gfx10':
+  case 'gfx11':
+  case 'gfx12': {
+    const parts = text.split('|').map(v => v.trim());
+    await gfxLogo(sock, from, msg, command, parts[0], parts[1]);
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 🔧 TOOLS
+  // ════════════════════════════════════════════════════════════════
+
+  case 'idch': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text || !text.includes('https://whatsapp.com/channel/')) return reply('❌ Provide a valid channel link.');
+    const code = text.split('https://whatsapp.com/channel/')[1];
+    try {
+      const res = await sock.newsletterMetadata('invite', code);
+      await reply(`📡 *Channel Info:*\n*ID:* ${res.id}\n*Name:* ${res.name}\n*Followers:* ${res.subscribers}\n*Status:* ${res.state}\n*Verified:* ${res.verification === 'VERIFIED' ? '✅' : '❌'}`);
+    } catch (e) { await reply(`❌ Failed: ${e.message}`); }
+    return true;
+  }
+
+  case 'qc': {
+    if (!text) return reply('❌ Usage: .qc Your quote here');
+    const name = msg.pushName || 'User';
+    let ppUrl = 'https://telegra.ph/file/6880771c1f1b5954d7203.jpg';
+    try { ppUrl = await sock.profilePictureUrl(sender, 'image'); } catch (_) {}
+    const url = `https://www.laurine.site/api/generator/qc?text=${encodeURIComponent(text)}&name=${encodeURIComponent(name)}&photo=${encodeURIComponent(ppUrl)}`;
+    try {
+      await sock.sendMessage(from, { image: { url }, caption: `💬 *"${text}"*\n— ${name}` }, { quoted: msg });
+    } catch (e) { await reply(`❌ Quote card failed: ${e.message}`); }
+    return true;
+  }
+
+  case 'ascii': {
+    if (!text) return reply('❌ Usage: .ascii Hello World');
+    try {
+      const res = await axios.get(`https://artii.herokuapp.com/make?text=${encodeURIComponent(text)}`);
+      await reply(`🎨 ASCII Art:\n\n${res.data}`);
+    } catch { await reply('❌ ASCII generation failed.'); }
+    return true;
+  }
+
+  case 'gamefact': {
+    try {
+      const res = await axios.get('https://www.freetogame.com/api/games');
+      const g = res.data[Math.floor(Math.random() * res.data.length)];
+      await reply(`🎮 *${g.title}*\n🎯 Genre: ${g.genre}\n💻 Platform: ${g.platform}\n🔗 ${g.game_url}`);
+    } catch { await reply('❌ Failed to fetch game fact.'); }
+    return true;
+  }
+
+  case 'inspire': {
+    try {
+      const res = await axios.get('https://type.fit/api/quotes');
+      const q = res.data[Math.floor(Math.random() * res.data.length)];
+      await reply(`🌟 *"${q.text}"*\n— ${q.author || 'Unknown'}`);
+    } catch { await reply('🌟 Keep going! Success is not final, failure is not fatal.'); }
+    return true;
+  }
+
+  case 'dadjoke': {
+    try {
+      const res = await axios.get('https://icanhazdadjoke.com/', { headers: { Accept: 'application/json' } });
+      await reply(`👨‍🦳 *Dad Joke:*\n${res.data.joke}`);
+    } catch { await reply('👨‍🦳 Why don\'t scientists trust atoms? Because they make up everything!'); }
+    return true;
+  }
+
+  default:
+    return false; // Command not handled
   }
 }
 
