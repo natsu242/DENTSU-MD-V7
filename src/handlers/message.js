@@ -1,6 +1,6 @@
 const config = require('../config');
 const { getContentType, jidNormalizedUser } = require('baileys');
-const { getTime, getDate, getRam, getUptime, countCommands, getHost } = require('../lib/utils');
+const { getTime, getDate, getRam, getUptime } = require('../lib/utils');
 const { isOwner } = require('../lib/utils');
 const { handleCommand } = require('../commands');
 
@@ -17,7 +17,6 @@ async function messageHandler(sock, { messages, type }) {
   if (from === 'status@broadcast') return;
 
   const isGroup    = from.endsWith('@g.us');
-  const botJid     = jidNormalizedUser(sock.user.id);
   const botNumber  = sock.user.id.split(':')[0];
   const botFullJid = botNumber + '@s.whatsapp.net';
 
@@ -46,6 +45,18 @@ async function messageHandler(sock, { messages, type }) {
         : '';
 
   if (!body) return;
+
+  // — Auto audio response when bot is mentioned —
+  const mentionedJids = rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  if (mentionedJids.includes(botFullJid) || mentionedJids.includes(botNumber + ':0@s.whatsapp.net')) {
+    try {
+      await sock.sendMessage(from, {
+        audio: { url: 'https://files.catbox.moe/z5ece4.ogg' },
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: true,
+      }, { quoted: msg });
+    } catch (_) {}
+  }
 
   const PREFIXES = config.PREFIXES || ['.', '!', '/', '#', '$'];
   let usedPrefix = '', command = '', args = [];
@@ -81,7 +92,7 @@ async function messageHandler(sock, { messages, type }) {
   const ctx = {
     sock, msg, from, sender, senderNumber, isGroup,
     args, text, quoted, reply, sendImage,
-    command, prefix: usedPrefix || config.PREFIX, botNumber, botJid,
+    command, prefix: usedPrefix || config.PREFIX, botNumber,
     isOwner: isOwner(sender),
   };
 
@@ -91,11 +102,11 @@ async function messageHandler(sock, { messages, type }) {
     }
     const handled = await handleCommand(ctx);
     if (handled === false) {
-      await reply(`❌ Commande *${command}* introuvable.\nTape *.menu* pour voir toutes les commandes.`);
+      await reply(`❌ Command *${command}* not found.\nType *.menu* to see all commands.`);
     }
   } catch (err) {
-    console.error(`[CMD:${command}] Erreur:`, err.message);
-    try { await reply(`⚠️ Erreur lors de *${command}*.\n_${err.message}_`); } catch (_) {}
+    console.error(`[CMD:${command}]`, err.message);
+    try { await reply(`⚠️ Error in *${command}*.\n_${err.message}_`); } catch (_) {}
   } finally {
     if (config.AUTO_TYPING) {
       try { await sock.sendPresenceUpdate('paused', from); } catch (_) {}
@@ -106,332 +117,226 @@ async function messageHandler(sock, { messages, type }) {
 async function sendMainMenu(ctx) {
   const { sock, from, msg, senderNumber, sender } = ctx;
 
+  // 🤖 Reaction on menu
+  try {
+    await sock.sendMessage(from, { react: { text: '🤖', key: msg.key } });
+  } catch (_) {}
+
+  const now = new Date();
   const caption =
 `╔╦══════════════════════╦╗
-║║   ${config.BOT_NAME || 'DENTSU MD V7'}   ║║
+║║    *DENTSU MD V7*    ║║
 ╚╩══════════════════════╩╝
 
-╔════[ 🤖 ʙᴏᴛ ɪɴғᴏ ]════╗
-║ 👑 ᴏᴡɴᴇʀ : ${config.OWNER_NUMBER || 'DENTSU-MD'}
-║ ⏱️ ʀᴜɴᴛɪᴍᴇ : ${getUptime()}
-║ 📦 ᴘʀᴇғɪx : ${config.PREFIX}
-║ ⚙️ ᴍᴏᴅᴇ : ${config.MODE}
-║ 🏷️ ᴠᴇʀsɪᴏɴ : 7.0.0 Bᴇᴛᴀ
-╚══════════════════════╝
+────────────────────
+*NameBot :* DENTSU MD
+*Version :* V7
+*Date    :* ${getDate()}
+*Heure   :* ${getTime()}
+*User    :* @${senderNumber}
+*Mode    :* ${config.MODE.toUpperCase()}
+*Ram     :* ${getRam()}
+*Host    :* www.dentsu-md-v7.onrender.com
+────────────────────
 
-╔══[ 🧠 ᴀɪ ]══╗
-║ ▶ ai
-║ ▶ gpt
-║ ▶ gemini
-║ ▶ deepseek
-║ ▶ grok-ai
-║ ▶ codeai
-║ ▶ storyai
-║ ▶ triviaai
-║ ▶ photoai
+🌐 *Visit Website* → https://dentsu-md-v7.onrender.com
+📋 *Prefix* → ${config.PREFIX}
+
+╔══[ 👥 ɢʀᴏᴜᴘ ᴍᴇɴᴜ ]══╗
+║ ▶ tagall ▶ hidetag ▶ promote
+║ ▶ demote ▶ kick ▶ add
+║ ▶ mute ▶ unmute ▶ left
+║ ▶ grouplink ▶ resetlink
+║ ▶ kickadmins ▶ kickall
+║ ▶ listadmins ▶ listonline
+║ ▶ opengc ▶ closegc
+║ ▶ opentime ▶ closetime
+║ ▶ antilink ▶ creategroup
+║ ▶ join ▶ hijack ▶ admin
+║ ▶ announce ▶ antibot
+║ ▶ antighost ▶ antisticker
+║ ▶ antiword ▶ approve
+║ ▶ approveall ▶ desc
+║ ▶ disappear ▶ everyone
+║ ▶ groupinfo ▶ groupstats
+║ ▶ gstatus ▶ invite ▶ lock
+║ ▶ open ▶ poll ▶ protection
+║ ▶ reject ▶ requests
+║ ▶ revoke ▶ rtag ▶ setgpp
+║ ▶ subject ▶ tagadmins
+║ ▶ totag ▶ unlock ▶ warn
+║ ▶ warncount ▶ warnreset
+║ ▶ welcome ▶ goodbye
 ╚══════════════════════╝
-╔══[ 👥 ɢʀᴏᴜᴘᴇ ]══╗
-║ ▶ tagall
-║ ▶ hidetag
-║ ▶ promote
-║ ▶ demote
-║ ▶ kick
-║ ▶ add
-║ ▶ mute
-║ ▶ unmute
-║ ▶ grouplink
-║ ▶ resetlink
-║ ▶ kickall
-║ ▶ listadmins
-║ ▶ groupinfo
-║ ▶ subject
-║ ▶ desc
-║ ▶ left
-║ ▶ join
-║ ▶ poll
-║ ▶ warn
-║ ▶ lock
-║ ▶ unlock
-║ ▶ creategroup
+╔══[ 👑 ᴏᴡɴᴇʀ ᴍᴇɴᴜ ]══╗
+║ ▶ setpp ▶ ban ▶ unban
+║ ▶ self ▶ public ▶ autoread
+║ ▶ autobio ▶ autorecording
+║ ▶ autotyping ▶ autoviewstatus
+║ ▶ autoreact ▶ block ▶ unblock
+║ ▶ delete ▶ setaccount
+║ ▶ addsudo ▶ delsudo ▶ listsudo
+║ ▶ fixowner ▶ getbot ▶ vv ▶ vv2
+║ ▶ broadcast ▶ mode
+║ ▶ ping ▶ alive ▶ runtime
 ╚══════════════════════╝
-╔══[ 👑 ᴏᴡɴᴇʀ ]══╗
-║ ▶ ping
-║ ▶ alive
-║ ▶ mode
-║ ▶ block
-║ ▶ unblock
-║ ▶ broadcast
-║ ▶ addsudo
-║ ▶ delsudo
-║ ▶ listsudo
-║ ▶ listgc
-║ ▶ leaveall
-║ ▶ del
-║ ▶ setbio
-║ ▶ setname
-║ ▶ vv
-║ ▶ pair
-║ ▶ admin
-║ ▶ leave
-║ ▶ newgc
-║ ▶ ban1
-║ ▶ unban1
-║ ▶ sudo
-║ ▶ listban
-║ ▶ autoviewstatus
-║ ▶ autotyping
+╔══[ 🎉 ғᴜɴ ᴍᴇɴᴜ ]══╗
+║ ▶ truth ▶ dare ▶ joke
+║ ▶ ship ▶ rate ▶ flirt
+║ ▶ roast ▶ compliment
+║ ▶ 8ball ▶ advice ▶ quote
+║ ▶ emoji ▶ marige ▶ bacha
+║ ▶ bachi ▶ breakup ▶ husband
+║ ▶ wife ▶ propose ▶ crush
+║ ▶ kiss ▶ hug ▶ slap ▶ dance
+║ ▶ cry ▶ cuddle ▶ bully
+║ ▶ pat ▶ wink ▶ smile
+║ ▶ happy ▶ angry ▶ coinflip
+║ ▶ flip ▶ pick ▶ repeat
+║ ▶ send ▶ character
+║ ▶ compatibility ▶ aura
+║ ▶ lovetest ▶ ringtone
 ╚══════════════════════╝
-╔══[ 📥 ᴅᴏᴡɴʟᴏᴀᴅ ]══╗
-║ ▶ ytmp3
-║ ▶ ytb
-║ ▶ song
-║ ▶ play
-║ ▶ mp4
-║ ▶ fb
-║ ▶ insta
-║ ▶ tiktok
-║ ▶ tiktok2
-║ ▶ pint
-║ ▶ apk
-║ ▶ modapk
-║ ▶ git
-║ ▶ wastatus
-║ ▶ drama
-║ ▶ mega
-║ ▶ autodownload
+╔══[ 🧠 ᴀɪ ᴍᴇɴᴜ ]══╗
+║ ▶ ai ▶ gpt ▶ gpt4 ▶ gpt5
+║ ▶ metaai ▶ aiimg ▶ codeai
+║ ▶ photoai ▶ storyai
+║ ▶ triviaai ▶ deepseek
+║ ▶ grok-ai ▶ qwen ▶ gemini
 ╚══════════════════════╝
-╔══[ 📸 ᴍᴇᴅɪᴀ ]══╗
-║ ▶ sticker
-║ ▶ s
-║ ▶ sticker2img
-║ ▶ toimage
-║ ▶ remini
-║ ▶ couplepp
-║ ▶ dewatermark
-║ ▶ pies
-║ ▶ removebg
-║ ▶ circle
-║ ▶ imageinfo
-║ ▶ gcpp
-║ ▶ qrcode
-╚══════════════════════╝
-╔══[ 🔍 sᴇᴀʀᴄʜ ]══╗
-║ ▶ img
-║ ▶ yts
-║ ▶ iplookup
-║ ▶ pinterestimg
-║ ▶ lyrics
-║ ▶ searchsticker
-║ ▶ npm
-║ ▶ github
-║ ▶ npmstalk
-║ ▶ ffstalk
-║ ▶ simdata
+╔══[ 🔍 sᴇᴀʀᴄʜ ᴍᴇɴᴜ ]══╗
+║ ▶ img ▶ yts ▶ iplookup
+║ ▶ pinterestimg ▶ lyrics
+║ ▶ searchsticker ▶ npm
+║ ▶ github ▶ npmstalk
+║ ▶ ffstalk ▶ simdata
 ║ ▶ screenshot
 ╚══════════════════════╝
-╔══[ 🎉 ғᴜɴ ]══╗
-║ ▶ truth
-║ ▶ dare
-║ ▶ joke
-║ ▶ ship
-║ ▶ rate
-║ ▶ flirt
-║ ▶ roast
-║ ▶ compliment
-║ ▶ 8ball
-║ ▶ advice
-║ ▶ quote
-║ ▶ emoji
-║ ▶ marige
-║ ▶ bacha
-║ ▶ bachi
-║ ▶ breakup
-║ ▶ husband
-║ ▶ wife
-║ ▶ propose
-║ ▶ crush
-║ ▶ kiss
-║ ▶ hug
-║ ▶ slap
-║ ▶ dance
-║ ▶ cry
-║ ▶ cuddle
-║ ▶ bully
-║ ▶ pat
-║ ▶ wink
-║ ▶ smile
-║ ▶ happy
-║ ▶ angry
-║ ▶ coinflip
-║ ▶ flip
-║ ▶ pick
-║ ▶ repeat
-║ ▶ send
-║ ▶ character
-║ ▶ compatibility
-║ ▶ aura
-║ ▶ lovetest
-║ ▶ ringtone
+╔══[ 🎮 ɢᴀᴍᴇ ᴍᴇɴᴜ ]══╗
+║ ▶ rps ▶ dice ▶ coin
+║ ▶ coinbattle ▶ numberbattle
+║ ▶ numbattle ▶ hangman
+║ ▶ tictactoe ▶ guess
+║ ▶ math ▶ emojiquiz
 ╚══════════════════════╝
-╔══[ 🎮 ɢᴀᴍᴇ ]══╗
-║ ▶ rps
-║ ▶ dice
-║ ▶ coin
-║ ▶ hangman
-║ ▶ guess
-║ ▶ math
-║ ▶ emojiquiz
-║ ▶ numberbattle
-║ ▶ coinbattle
-║ ▶ trivia
+╔══[ 🎵 sᴏᴜɴᴅ ᴍᴇɴᴜ ]══╗
+║ ▶ bass ▶ blown ▶ deep
+║ ▶ earrape ▶ fast
+║ ▶ nightcore ▶ reverse
+║ ▶ robot ▶ slow ▶ smooth
+║ ▶ squirrel ▶ tts ▶ say
 ╚══════════════════════╝
-╔══[ 🎵 sᴏᴜɴᴅ ]══╗
-║ ▶ tts
-║ ▶ say
-║ ▶ bass
-║ ▶ nightcore
-║ ▶ reverse
-║ ▶ robot
-║ ▶ slow
-║ ▶ fast
+╔══[ 🔧 ᴏᴛʜᴇʀ ᴍᴇɴᴜ ]══╗
+║ ▶ weather ▶ wiki ▶ currency
+║ ▶ time ▶ qrcode ▶ readqr
+║ ▶ shorturl ▶ getbot ▶ jid
+║ ▶ getpp ▶ github ▶ npm
+║ ▶ createcase ▶ getcase
+║ ▶ dictionary ▶ recipe ▶ book
+║ ▶ remind ▶ calculate
+║ ▶ mathfact ▶ sciencefact
+║ ▶ horoscope ▶ password
+║ ▶ genpass ▶ readmore
+║ ▶ idch ▶ cekidch
 ╚══════════════════════╝
-╔══[ 🔧 ᴏᴛʜᴇʀ ]══╗
-║ ▶ weather
-║ ▶ wiki
-║ ▶ currency
-║ ▶ time
-║ ▶ shorturl
-║ ▶ myip
-║ ▶ jid
-║ ▶ imdb
-║ ▶ dictionary
-║ ▶ recipe
-║ ▶ calculate
-║ ▶ mathfact
-║ ▶ sciencefact
-║ ▶ horoscope
-║ ▶ password
-║ ▶ remind
-║ ▶ news
-║ ▶ cid
-║ ▶ getpp
-║ ▶ boost
+╔══[ 🖼️ ʀᴀɴᴅᴏᴍ ɪᴍᴀɢᴇ ]══╗
+║ ▶ hentai ▶ chinagirl
+║ ▶ bluearchive ▶ boypic
+║ ▶ carimage ▶ random-girl
+║ ▶ hijab-girl ▶ indonesia-girl
+║ ▶ japan-girl ▶ korean-girl
 ╚══════════════════════╝
-╔══[ 🖼️ ʀᴀɴᴅᴏᴍ ]══╗
-║ ▶ chinagirl
-║ ▶ boypic
-║ ▶ random-girl
-║ ▶ hijab-girl
-║ ▶ indonesia-girl
-║ ▶ japan-girl
-║ ▶ korean-girl
-║ ▶ bluearchive
-║ ▶ indo
-║ ▶ china
-║ ▶ korea
-║ ▶ thailand
-║ ▶ vietnam
-║ ▶ loli
-║ ▶ japan
-║ ▶ couple
-║ ▶ romance
+╔══[ 🎌 ᴀɴɪᴍᴇ ᴍᴇɴᴜ ]══╗
+║ ▶ waifu ▶ neko ▶ kitsune
+║ ▶ maid ▶ animegirl ▶ animeboy
+║ ▶ catgirl ▶ foxgirl ▶ kawaii
+║ ▶ chibi ▶ idol ▶ princess
+║ ▶ warrior ▶ samurai ▶ demon
+║ ▶ angel ▶ vampire ▶ dragon
+║ ▶ magical ▶ cyberpunk ▶ ba
+║ ▶ husbando ▶ manga ▶ cosplay
+║ ▶ anime ▶ hentail
 ╚══════════════════════╝
-╔══[ 🎌 ᴀɴɪᴍᴇ ]══╗
-║ ▶ waifu
-║ ▶ neko
-║ ▶ kitsune
-║ ▶ maid
-║ ▶ animegirl
-║ ▶ animeboy
-║ ▶ catgirl
-║ ▶ foxgirl
-║ ▶ kawaii
-║ ▶ chibi
-║ ▶ idol
-║ ▶ princess
-║ ▶ warrior
-║ ▶ samurai
-║ ▶ demon
-║ ▶ angel
-║ ▶ vampire
-║ ▶ dragon
-║ ▶ magical
-║ ▶ cyberpunk
-║ ▶ ba
-║ ▶ husbando
-║ ▶ manga
-║ ▶ cosplay
-║ ▶ anime
+╔══[ 📥 ᴅᴏᴡɴʟᴏᴀᴅᴇʀ ]══╗
+║ ▶ apk ▶ edit ▶ fb
+║ ▶ git ▶ gitclone ▶ insta
+║ ▶ mega ▶ mp4 ▶ img
+║ ▶ wiki ▶ yts ▶ calc
+║ ▶ circle ▶ get ▶ shorturl
+║ ▶ tomp3 ▶ pint ▶ play ▶ song
+║ ▶ video ▶ yta ▶ ytmp3
+║ ▶ ytb/youtube ▶ tt/tiktok
+║ ▶ aiimg
 ╚══════════════════════╝
-╔══[ 🕹️ ʙᴏʏᴅᴘ ]══╗
-║ ▶ boydp1
-║ ▶ boydp2
-║ ▶ boydp3
-║ ▶ boydp4
-║ ▶ boydp5
-║ ▶ boydp6
-║ ▶ boydp7
-║ ▶ boydp8
-║ ▶ boydp9
-║ ▶ boydp10
-║ ▶ boydp11
-║ ▶ boydp12
-║ ▶ boydp13
-║ ▶ boydp14
-║ ▶ boydp15
-║ ▶ boydp16
-║ ▶ boydp17
-║ ▶ boydp18
-║ ▶ boydp19
-║ ▶ boydp20
-║ ▶ boydp21
-║ ▶ boydp22
+╔══[ 📸 ᴍᴇᴅɪᴀ ᴍᴇɴᴜ ]══╗
+║ ▶ imagehelp ▶ imageinfo
+║ ▶ remini ▶ sticker/s
+║ ▶ stickertoimg ▶ take
+║ ▶ toimage ▶ videotoimg
 ╚══════════════════════╝
-╔══[ 👗 ɢɪʀʟᴅᴘ ]══╗
-║ ▶ girldp1
-║ ▶ girldp2
-║ ▶ girldp3
-║ ▶ girldp4
-║ ▶ girldp5
-║ ▶ girldp6
-║ ▶ girldp7
-║ ▶ girldp8
-║ ▶ girldp9
-║ ▶ girldp10
-║ ▶ girldp11
-║ ▶ girldp12
-║ ▶ girldp13
-║ ▶ girldp14
-║ ▶ girldp15
-║ ▶ girldp16
-║ ▶ girldp17
-║ ▶ girldp18
-║ ▶ girldp19
-║ ▶ girldp20
-║ ▶ girldp21
-║ ▶ girldp22
+╔══[ ✨ ᴇᴘʜᴏᴛᴏ ᴍᴇɴᴜ ]══╗
+║ ▶ glitchtext ▶ writetext
+║ ▶ advancedglow ▶ typographytext
+║ ▶ pixelglitch ▶ neonglitch
+║ ▶ flagtext ▶ flag3dtext
+║ ▶ deletingtext ▶ blackpinkstyle
+║ ▶ glowingtext ▶ underwatertext
+║ ▶ logomaker ▶ cartoonstyle
+║ ▶ papercutstyle ▶ watercolortext
+║ ▶ effectclouds ▶ blackpinklogo
+║ ▶ gradienttext ▶ summerbeach
+║ ▶ luxurygold ▶ multicoloredneon
+║ ▶ sandsummer ▶ galaxywallpaper
+║ ▶ style1917 ▶ makingneon
+║ ▶ royaltext ▶ freecreate
+║ ▶ galaxystyle ▶ createlogo
+║ ▶ lighteffects
 ╚══════════════════════╝
-╔══[ 💬 ᴍᴀɪɴ ]══╗
-║ ▶ menu
-║ ▶ alive
-║ ▶ ping
-║ ▶ uptime
-║ ▶ owner
-║ ▶ repo
-║ ▶ bot
-║ ▶ bomb
-║ ▶ ping2
+╔══[ ♉ ʟᴏɢᴏ ᴍᴇɴᴜ ]══╗
+║ ▶ gfx ▶ gfx2 ▶ gfx3
+║ ▶ gfx4 ▶ gfx5 ▶ gfx6
+║ ▶ gfx7 ▶ gfx8 ▶ gfx9
+║ ▶ gfx10 ▶ gfx11 ▶ gfx12
 ╚══════════════════════╝
-${config.BOT_FOOTER}`;
+╔══[ 🛠️ ᴛᴏᴏʟ ᴍᴇɴᴜ ]══╗
+║ ▶ anticall ▶ antidelete
+║ ▶ antiedit ▶ antistickerk
+║ ▶ autodownload ▶ autoread
+║ ▶ autorecord ▶ autostatus
+║ ▶ autotyping ▶ block
+║ ▶ blocklist ▶ shorturl
+║ ▶ tourl ▶ url ▶ broadcast
+║ ▶ del ▶ delme ▶ forward
+║ ▶ getbio ▶ getname ▶ jid
+║ ▶ leaveall ▶ listgc ▶ mode
+║ ▶ myname ▶ myprivacy
+║ ▶ mystatus ▶ quoted
+║ ▶ removepp ▶ save ▶ setbio
+║ ▶ setname ▶ setpp ▶ unblock
+║ ▶ unblockall ▶ whois
+╚══════════════════════╝
+
+🌐 *Visit Website* → https://dentsu-md-v7.onrender.com
+📋 *Copy Prefix* → ${config.PREFIX}
+> NatsuTech's Dev 🇨🇬`;
 
   try {
-    return await sock.sendMessage(from, {
+    await sock.sendMessage(from, {
       image: { url: config.MENU_IMAGE },
       caption,
       mentions: [sender],
+      contextInfo: {
+        forwardingScore: 999,
+        isForwarded: true,
+        forwardedNewsletterMessageInfo: {
+          newsletterJid: '120363423640959729@newsletter',
+          newsletterName: 'DENTSU MD',
+          serverMessageId: -1,
+        },
+      },
     }, { quoted: msg });
   } catch (_) {
-    return await sock.sendMessage(from, { text: caption, mentions: [sender] }, { quoted: msg });
+    await sock.sendMessage(from, { text: caption, mentions: [sender] }, { quoted: msg });
   }
 }
 
