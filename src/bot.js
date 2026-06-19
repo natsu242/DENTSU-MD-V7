@@ -17,7 +17,6 @@ const { setupStatusHandlers } = require('./handlers/status');
 
 const logger = pino({ level: 'silent' });
 
-// ── Garde les sockets en vie pendant le pairing (empêche le GC) ───
 const pendingSockets = new Map();
 
 const FALLBACK_VERSION = [2, 3000, 1023596128];
@@ -25,10 +24,10 @@ const FALLBACK_VERSION = [2, 3000, 1023596128];
 async function getVersion() {
   try {
     const { version } = await fetchLatestBaileysVersion();
-    console.log('[BOT] Version WhatsApp:', version.join('.'));
+    console.log('[BOT] WhatsApp version:', version.join('.'));
     return version;
   } catch (e) {
-    console.log('[BOT] fetchLatestBaileysVersion échoué → version fallback');
+    console.log('[BOT] fetchLatestBaileysVersion failed → fallback version');
     return FALLBACK_VERSION;
   }
 }
@@ -43,12 +42,10 @@ async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
 
-  // Nettoyer les éventuels fichiers corrompus d'une tentative précédente
   if (fs.existsSync(sessionPath)) {
     const files = fs.readdirSync(sessionPath);
-    // S'il y a des fichiers mais pas de creds.json → session corrompue, supprimer
     if (files.length > 0 && !files.includes('creds.json')) {
-      console.log(`[${sanitized}] Session corrompue détectée, nettoyage...`);
+      console.log(`[${sanitized}] Corrupted session detected, cleaning...`);
       fs.removeSync(sessionPath);
     }
   }
@@ -75,44 +72,67 @@ async function startSession(number) {
     syncFullHistory: false,
   });
 
-  // Garder le socket en vie pendant toute la phase de pairing
   pendingSockets.set(sanitized, sock);
 
-  // ── Sauvegarder les credentials ────────────────────────────────
   sock.ev.on('creds.update', saveCreds);
 
-  // ── Messages entrants ──────────────────────────────────────────
   sock.ev.on('messages.upsert', async (m) => {
     try { await messageHandler(sock, m); }
-    catch (e) { console.error(`[${sanitized}] Erreur messageHandler:`, e.message); }
+    catch (e) { console.error(`[${sanitized}] messageHandler error:`, e.message); }
   });
 
-  // ── Statuts ────────────────────────────────────────────────────
   setupStatusHandlers(sock);
 
-  // ── Connexion ──────────────────────────────────────────────────
+  // ── Group events: Welcome / Goodbye ────────────────────────────
+  sock.ev.on('group-participants.update', async (update) => {
+    try {
+      const { id, participants, action } = update;
+      const meta = await sock.groupMetadata(id);
+      for (const jid of participants) {
+        const num = jid.split('@')[0];
+        if (action === 'add') {
+          await sock.sendMessage(id, {
+            image: { url: config.MENU_IMAGE },
+            caption: `╔╦══════════════════╦╗\n║║   *WELCOME* 🎉   ║║\n╚╩══════════════════╩╝\n\n👋 Welcome @${num} to *${meta.subject}*!\n\nWe're glad to have you here. Please read the group rules.\n\n_Powered by DENTSU MD V7_`,
+            mentions: [jid],
+          });
+        } else if (action === 'remove') {
+          await sock.sendMessage(id, {
+            image: { url: config.MENU_IMAGE },
+            caption: `╔╦══════════════════╦╗\n║║   *GOODBYE* 👋   ║║\n╚╩══════════════════╩╝\n\n😢 @${num} has left *${meta.subject}*.\n\nWe'll miss you! Come back anytime.\n\n_Powered by DENTSU MD V7_`,
+            mentions: [jid],
+          });
+        }
+      }
+    } catch (e) {
+      console.log(`[group-participants] Error:`, e.message);
+    }
+  });
+
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update;
 
     if (connection === 'open') {
-      console.log(`[${sanitized}] ✅ Connecté !`);
+      console.log(`[${sanitized}] ✅ Connected!`);
       pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
 
-      // ── Auto-follow newsletters ──────────────────────────────
+      // ── Auto-follow 4 newsletters ──────────────────────────────
       const newsletters = [
+        '120363408953987969@newsletter',
+        '120363425458450099@newsletter',
         '120363423640959729@newsletter',
         '120363373387302754@newsletter',
       ];
       for (const nl of newsletters) {
-        try { await sock.newsletterFollow(nl); console.log(`[${sanitized}] Newsletter suivi: ${nl}`); }
+        try { await sock.newsletterFollow(nl); console.log(`[${sanitized}] Newsletter followed: ${nl}`); }
         catch (e) { console.log(`[${sanitized}] Newsletter skip (${nl}):`, e.message); }
       }
 
       // ── Auto-join group ──────────────────────────────────────
       try {
         await sock.groupAcceptInvite('GtXASqDdchAFvEJ95cQQ0F');
-        console.log(`[${sanitized}] Groupe rejoint avec succès`);
+        console.log(`[${sanitized}] Group joined successfully`);
       } catch (e) {
         if (!e.message?.includes('already')) {
           console.log(`[${sanitized}] Group join skip:`, e.message);
@@ -125,42 +145,38 @@ async function startSession(number) {
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const reason     = lastDisconnect?.error?.output?.payload?.error || statusCode;
-      console.log(`[${sanitized}] Connexion fermée. Raison: ${reason} (code: ${statusCode})`);
+      console.log(`[${sanitized}] Connection closed. Reason: ${reason} (code: ${statusCode})`);
 
       pendingSockets.delete(sanitized);
 
       if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
-        console.log(`[${sanitized}] Session supprimée (logout)`);
+        console.log(`[${sanitized}] Session deleted (logout)`);
       } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
-        console.log(`[${sanitized}] Restart requis, reconnexion dans 2s...`);
+        console.log(`[${sanitized}] Restart required, reconnecting in 2s...`);
         setTimeout(() => reconnectSession(sanitized), 2000);
       } else if (statusCode === 408 || statusCode === 503) {
-        console.log(`[${sanitized}] Timeout/Service indisponible, reconnexion dans 10s...`);
+        console.log(`[${sanitized}] Timeout/Service unavailable, reconnecting in 10s...`);
         setTimeout(() => reconnectSession(sanitized), 10000);
       } else {
-        console.log(`[${sanitized}] Reconnexion dans 5s...`);
+        console.log(`[${sanitized}] Reconnecting in 5s...`);
         setTimeout(() => reconnectSession(sanitized), 5000);
       }
     }
   });
 
-  // ── Code de jumelage ────────────────────────────────────────────
   if (!sock.authState.creds.registered) {
-    // Attendre que le WebSocket WhatsApp soit initialisé
     await delay(3000);
     try {
-      console.log(`[${sanitized}] Demande du code de jumelage (version ${version.join('.')})...`);
+      console.log(`[${sanitized}] Requesting pairing code (version ${version.join('.')})...`);
       const code          = await sock.requestPairingCode(sanitized);
       const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
       console.log(`[${sanitized}] ✅ Code: ${formattedCode}`);
 
-      // Le sock reste dans pendingSockets jusqu'à connection === 'open'
-      // Timeout de sécurité : nettoyer après 5 minutes si jamais connecté
       setTimeout(() => {
         if (pendingSockets.has(sanitized)) {
-          console.log(`[${sanitized}] Timeout pairing (5min), nettoyage socket pending`);
+          console.log(`[${sanitized}] Pairing timeout (5min), cleaning pending socket`);
           pendingSockets.delete(sanitized);
         }
       }, 5 * 60 * 1000);
@@ -168,10 +184,10 @@ async function startSession(number) {
       return { sock, code: formattedCode };
     } catch (err) {
       const realError = err?.message || String(err);
-      console.error(`[${sanitized}] Erreur requestPairingCode:`, realError);
+      console.error(`[${sanitized}] requestPairingCode error:`, realError);
       pendingSockets.delete(sanitized);
       try { sock.end(); } catch (_) {}
-      throw new Error(`Échec du code de jumelage: ${realError}`);
+      throw new Error(`Pairing code failed: ${realError}`);
     }
   }
 
@@ -183,12 +199,11 @@ async function startSession(number) {
 async function reconnectSession(sanitized) {
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
   if (!fs.existsSync(sessionPath)) return;
-  // Ne pas reconnecter si une session est déjà active
   if (store.getSession(sanitized)) return;
   try {
     await startSession(sanitized);
   } catch (e) {
-    console.error(`[${sanitized}] Erreur reconnexion:`, e.message);
+    console.error(`[${sanitized}] Reconnection error:`, e.message);
     setTimeout(() => reconnectSession(sanitized), 15000);
   }
 }
@@ -199,13 +214,13 @@ async function startExistingSessions() {
     const p = path.join(config.SESSION_BASE_PATH, d);
     return fs.statSync(p).isDirectory() && fs.readdirSync(p).length > 0;
   });
-  console.log(`[BOT] ${dirs.length} session(s) existante(s) à restaurer`);
+  console.log(`[BOT] ${dirs.length} existing session(s) to restore`);
   for (const dir of dirs) {
     try {
       await startSession(dir);
       await delay(2000);
     } catch (e) {
-      console.error(`[BOT] Erreur session ${dir}:`, e.message);
+      console.error(`[BOT] Session error ${dir}:`, e.message);
     }
   }
 }
