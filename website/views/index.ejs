@@ -16,16 +16,16 @@
       <h1 class="lang-title">🤖 <%= botName %></h1>
       <p class="lang-subtitle">by <%= devName %></p>
       <div class="lang-flags-grid">
-        <button class="flag-btn" onclick="setLang('fr')" title="Français">🇫🇷</button>
-        <button class="flag-btn" onclick="setLang('en')" title="English">🇺🇸</button>
-        <button class="flag-btn" onclick="setLang('es')" title="Español">🇪🇸</button>
-        <button class="flag-btn" onclick="setLang('zh')" title="中文">🇨🇳</button>
-        <button class="flag-btn" onclick="setLang('hi')" title="हिन्दी">🇮🇳</button>
-        <button class="flag-btn" onclick="setLang('ar')" title="العربية">🇸🇦</button>
-        <button class="flag-btn" onclick="setLang('pt')" title="Português">🇧🇷</button>
-        <button class="flag-btn" onclick="setLang('ru')" title="Русский">🇷🇺</button>
-        <button class="flag-btn" onclick="setLang('bn')" title="বাংলা">🇧🇩</button>
-        <button class="flag-btn" onclick="setLang('id')" title="Indonesia">🇮🇩</button>
+        <button class="flag-btn" onclick="setLang('fr')"><img src="https://flagcdn.com/48x36/fr.png" alt="Français"></button>
+        <button class="flag-btn" onclick="setLang('en')"><img src="https://flagcdn.com/48x36/us.png" alt="English"></button>
+        <button class="flag-btn" onclick="setLang('es')"><img src="https://flagcdn.com/48x36/es.png" alt="Español"></button>
+        <button class="flag-btn" onclick="setLang('zh')"><img src="https://flagcdn.com/48x36/cn.png" alt="中文"></button>
+        <button class="flag-btn" onclick="setLang('hi')"><img src="https://flagcdn.com/48x36/in.png" alt="हिन्दी"></button>
+        <button class="flag-btn" onclick="setLang('ar')"><img src="https://flagcdn.com/48x36/sa.png" alt="العربية"></button>
+        <button class="flag-btn" onclick="setLang('pt')"><img src="https://flagcdn.com/48x36/br.png" alt="Português"></button>
+        <button class="flag-btn" onclick="setLang('ru')"><img src="https://flagcdn.com/48x36/ru.png" alt="Русский"></button>
+        <button class="flag-btn" onclick="setLang('bn')"><img src="https://flagcdn.com/48x36/bd.png" alt="বাংলা"></button>
+        <button class="flag-btn" onclick="setLang('id')"><img src="https://flagcdn.com/48x36/id.png" alt="Indonesia"></button>
       </div>
     </div>
   </div>
@@ -33,18 +33,18 @@
   <!-- ═══ PAGE PRINCIPALE ═══ -->
   <div class="container" id="mainContent" style="display:none;">
 
-    <!-- Switcher langue (mini drapeaux) -->
+    <!-- Mini drapeaux (switcher) -->
     <div class="lang-mini-switcher">
-      <button class="flag-mini active-flag" id="flag-fr" onclick="setLang('fr')">🇫🇷</button>
-      <button class="flag-mini" id="flag-en" onclick="setLang('en')">🇺🇸</button>
-      <button class="flag-mini" id="flag-es" onclick="setLang('es')">🇪🇸</button>
-      <button class="flag-mini" id="flag-zh" onclick="setLang('zh')">🇨🇳</button>
-      <button class="flag-mini" id="flag-hi" onclick="setLang('hi')">🇮🇳</button>
-      <button class="flag-mini" id="flag-ar" onclick="setLang('ar')">🇸🇦</button>
-      <button class="flag-mini" id="flag-pt" onclick="setLang('pt')">🇧🇷</button>
-      <button class="flag-mini" id="flag-ru" onclick="setLang('ru')">🇷🇺</button>
-      <button class="flag-mini" id="flag-bn" onclick="setLang('bn')">🇧🇩</button>
-      <button class="flag-mini" id="flag-id" onclick="setLang('id')">🇮🇩</button>
+      <button class="flag-mini active-flag" id="flag-fr" onclick="setLang('fr')"><img src="https://flagcdn.com/24x18/fr.png" alt="fr"></button>
+      <button class="flag-mini" id="flag-en" onclick="setLang('en')"><img src="https://flagcdn.com/24x18/us.png" alt="en"></button>
+      <button class="flag-mini" id="flag-es" onclick="setLang('es')"><img src="https://flagcdn.com/24x18/es.png" alt="es"></button>
+      <button class="flag-mini" id="flag-zh" onclick="setLang('zh')"><img src="https://flagcdn.com/24x18/cn.png" alt="zh"></button>
+      <button class="flag-mini" id="flag-hi" onclick="setLang('hi')"><img src="https://flagcdn.com/24x18/in.png" alt="hi"></button>
+      <button class="flag-mini" id="flag-ar" onclick="setLang('ar')"><img src="https://flagcdn.com/24x18/sa.png" alt="ar"></button>
+      <button class="flag-mini" id="flag-pt" onclick="setLang('pt')"><img src="https://flagcdn.com/24x18/br.png" alt="pt"></button>
+      <button class="flag-mini" id="flag-ru" onclick="setLang('ru')"><img src="https://flagcdn.com/24x18/ru.png" alt="ru"></button>
+      <button class="flag-mini" id="flag-bn" onclick="setLang('bn')"><img src="https://flagcdn.com/24x18/bd.png" alt="bn"></button>
+      <button class="flag-mini" id="flag-id" onclick="setLang('id')"><img src="https://flagcdn.com/24x18/id.png" alt="id"></button>
     </div>
 
     <!-- Header -->
@@ -57,25 +57,14 @@
     <!-- Card connexion -->
     <div class="card">
       <h2 data-i18n="h2_connect">📱 Connecter WhatsApp</h2>
-      <p class="subtitle" data-i18n="subtitle_connect">
-        Entre ton numéro avec le code pays pour obtenir ton code de jumelage
-      </p>
+      <p class="subtitle" data-i18n="subtitle_connect">Entre ton numéro avec le code pays pour obtenir ton code de jumelage</p>
 
       <form id="pairForm">
         <div class="input-group">
           <span class="flag">🌍</span>
-          <input
-            type="tel"
-            id="number"
-            placeholder="Ex: 242065121108"
-            maxlength="15"
-            autocomplete="off"
-            inputmode="numeric"
-          >
+          <input type="tel" id="number" placeholder="Ex: 242065121108" maxlength="15" autocomplete="off" inputmode="numeric">
         </div>
-        <p class="hint" data-i18n="hint">
-          ⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)
-        </p>
+        <p class="hint" data-i18n="hint">⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)</p>
         <button id="pairBtn" type="submit" data-i18n="btn_pair">📲 Obtenir mon code</button>
       </form>
 
@@ -90,9 +79,7 @@
       <div id="steps" style="display:none;" class="steps-box">
         <h3 data-i18n="steps_title">📋 Comment entrer le code dans WhatsApp :</h3>
         <ol id="stepsList"></ol>
-        <div class="warning-box" data-i18n="warning">
-          ⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !
-        </div>
+        <div class="warning-box" data-i18n="warning">⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !</div>
       </div>
     </div>
 
@@ -107,13 +94,5 @@
   </div>
 
   <script src="/app.js"></script>
-  <script>
-    const codeInSteps = document.getElementById('codeInSteps');
-    const codeValue   = document.getElementById('codeValue');
-    if (codeValue && codeInSteps) {
-      const observer = new MutationObserver(() => { codeInSteps.textContent = codeValue.textContent; });
-      observer.observe(codeValue, { childList: true, characterData: true, subtree: true });
-    }
-  </script>
 </body>
 </html>
