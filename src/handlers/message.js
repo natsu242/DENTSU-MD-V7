@@ -46,20 +46,18 @@ async function messageHandler(sock, { messages, type }) {
 
   if (!body) return;
 
-  // ── Auto audio when bot is mentioned ──────────────────────────
+  // ── Auto audio on mention (non-blocking, doesn't stop command processing) ──
   const mentionedJids = rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid || [];
   const isMentioned = mentionedJids.some(j =>
     j === botFullJid || j === botNumber + ':0@s.whatsapp.net' || j.startsWith(botNumber + ':')
   );
   if (isMentioned) {
-    try {
-      await sock.sendMessage(from, {
-        audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
-        mimetype: 'audio/mpeg',
-        ptt: false,
-      }, { quoted: msg });
-    } catch (_) {}
-    return; // stop processing further if only a mention
+    sock.sendMessage(from, {
+      audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
+      mimetype: 'audio/mpeg',
+      ptt: false,
+    }, { quoted: msg }).catch(() => {});
+    // Continue to command processing instead of returning
   }
 
   const PREFIXES = config.PREFIXES || ['.', '!', '/', '#', '$'];
@@ -81,9 +79,9 @@ async function messageHandler(sock, { messages, type }) {
 
   const text = args.join(' ');
 
-  if (config.AUTO_TYPING) {
-    try { sock.sendPresenceUpdate('composing', from); } catch (_) {}
-  }
+  // Speed: send instant ✅ reaction so user knows the command was received,
+  // then process — removes the "is the bot dead?" uncertainty
+  sock.sendMessage(from, { react: { text: '⚡', key: msg.key } }).catch(() => {});
 
   const reply = async (content) => {
     if (typeof content === 'string') return sock.sendMessage(from, { text: content }, { quoted: msg });
@@ -110,18 +108,11 @@ async function messageHandler(sock, { messages, type }) {
   } catch (err) {
     console.error(`[CMD:${command}]`, err.message);
     try { await reply(`⚠️ Error in *${command}*: ${err.message}`); } catch (_) {}
-  } finally {
-    if (config.AUTO_TYPING) {
-      try { sock.sendPresenceUpdate('paused', from); } catch (_) {}
-    }
   }
 }
 
 async function sendMainMenu(ctx) {
   const { sock, from, msg, sender, senderNumber } = ctx;
-
-  // 🤖 Reaction
-  try { await sock.sendMessage(from, { react: { text: '🤖', key: msg.key } }); } catch (_) {}
 
   const P = config.PREFIX;
   const caption =
@@ -314,13 +305,6 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}squirrel
 ⁍ ${P}say / ${P}tts
 
-【 💀 BUG MENU 】
-⁍ ${P}bug-andro 242xxx
-⁍ ${P}kill-ui 242xxx
-⁍ ${P}freezer-ui 242xxx
-⁍ ${P}dentsu-aple 242xxx
-⁍ ${P}nullgc <linkgc>
-
 【 🐾 MEDIA MENU 】
 ⁍ ${P}sticker / ${P}s
 ⁍ ${P}toimg
@@ -342,7 +326,6 @@ async function sendMainMenu(ctx) {
 📋 *Prefix* → ${P}
 > _Powered by DENTSU MD V7 🤖_`;
 
-  // Send with clickable URL button
   try {
     await sock.sendMessage(from, {
       image: { url: config.MENU_IMAGE },
