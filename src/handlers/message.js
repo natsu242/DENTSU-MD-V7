@@ -31,6 +31,23 @@ async function messageHandler(sock, { messages, type }) {
     || msg.message?.documentWithCaptionMessage?.message
     || msg.message;
 
+  // ── BUG FIX: mention check AVANT body check ──────────────────
+  // Si quelqu'un tague le bot sans texte, body est vide → ancienne
+  // version retournait avant d'atteindre le code de mention.
+  const mentionedJids = rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  const isMentioned = mentionedJids.some(j =>
+    j === botFullJid || j === botNumber + ':0@s.whatsapp.net' || j.startsWith(botNumber + ':')
+  );
+  if (isMentioned) {
+    // ptt: true = vocal qui se joue automatiquement (voice note)
+    sock.sendMessage(from, {
+      audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
+      mimetype: 'audio/mpeg',
+      ptt: true,
+    }, { quoted: msg }).catch(() => {});
+    // On continue quand même pour traiter une commande si présente
+  }
+
   const mtype = getContentType(rawMsg);
   const body =
     mtype === 'conversation'                 ? rawMsg.conversation
@@ -45,20 +62,6 @@ async function messageHandler(sock, { messages, type }) {
         : '';
 
   if (!body) return;
-
-  // ── Auto audio on mention (non-blocking, doesn't stop command processing) ──
-  const mentionedJids = rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-  const isMentioned = mentionedJids.some(j =>
-    j === botFullJid || j === botNumber + ':0@s.whatsapp.net' || j.startsWith(botNumber + ':')
-  );
-  if (isMentioned) {
-    sock.sendMessage(from, {
-      audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
-      mimetype: 'audio/mpeg',
-      ptt: false,
-    }, { quoted: msg }).catch(() => {});
-    // Continue to command processing instead of returning
-  }
 
   const PREFIXES = config.PREFIXES || ['.', '!', '/', '#', '$'];
   let usedPrefix = '', command = '', args = [];
@@ -78,10 +81,6 @@ async function messageHandler(sock, { messages, type }) {
   if (!command) return;
 
   const text = args.join(' ');
-
-  // Speed: send instant ✅ reaction so user knows the command was received,
-  // then process — removes the "is the bot dead?" uncertainty
-  sock.sendMessage(from, { react: { text: '⚡', key: msg.key } }).catch(() => {});
 
   const reply = async (content) => {
     if (typeof content === 'string') return sock.sendMessage(from, { text: content }, { quoted: msg });
@@ -113,6 +112,9 @@ async function messageHandler(sock, { messages, type }) {
 
 async function sendMainMenu(ctx) {
   const { sock, from, msg, sender, senderNumber } = ctx;
+
+  // 🚀 Réaction uniquement pour le menu
+  sock.sendMessage(from, { react: { text: '🚀', key: msg.key } }).catch(() => {});
 
   const P = config.PREFIX;
   const caption =
