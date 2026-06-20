@@ -19,8 +19,10 @@ const logger = pino({ level: 'silent' });
 const pendingSockets = new Map();
 const msgCaches = new Map();
 const watchdogs = new Map();
+const presenceTimers = new Map();
 
 const FALLBACK_VERSION = [2, 3000, 1023596128];
+const WS_OPEN = 1; // WebSocket.OPEN
 
 async function getVersion() {
   try {
@@ -44,6 +46,23 @@ function clearWatchdog(sanitized) {
     clearInterval(watchdogs.get(sanitized));
     watchdogs.delete(sanitized);
   }
+}
+
+function clearPresenceTimer(sanitized) {
+  if (presenceTimers.has(sanitized)) {
+    clearInterval(presenceTimers.get(sanitized));
+    presenceTimers.delete(sanitized);
+  }
+}
+
+// Force-reconnect helper — ne supprime PAS les fichiers de session
+function forceReconnect(sanitized, sock, reason) {
+  console.log(`[${sanitized}] 🔴 ${reason} → reconnexion forcée...`);
+  clearWatchdog(sanitized);
+  clearPresenceTimer(sanitized);
+  store.deleteSession(sanitized);
+  try { sock.end(new Error(reason)); } catch (_) {}
+  setTimeout(() => reconnectSession(sanitized), 4000);
 }
 
 async function startSession(number) {
@@ -77,10 +96,12 @@ async function startSession(number) {
     browser: getBrowserValue(),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
+    // keepAlive au niveau protocole WebSocket (15s)
     keepAliveIntervalMs: 15000,
     retryRequestDelayMs: 250,
     generateHighQualityLinkPreview: false,
-    markOnlineOnConnect: false,
+    // true = bot apparaît "en ligne" dès la connexion même si le téléphone est hors-ligne
+    markOnlineOnConnect: true,
     syncFullHistory: false,
     msgRetryCounterMap,
     getMessage: async (key) => {
@@ -102,7 +123,6 @@ async function startSession(number) {
         }
       }
     }
-    // Fire-and-forget per batch — does not block next upsert event
     messageHandler(sock, { messages: msgs, type }).catch(e =>
       console.error(`[${sanitized}] messageHandler error:`, e.message)
     );
@@ -139,27 +159,48 @@ async function startSession(number) {
     const { connection, lastDisconnect } = update;
 
     if (connection === 'open') {
-      console.log(`[${sanitized}] ✅ Connected!`);
+      console.log(`[${sanitized}] ✅ Connecté!`);
       pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
 
-      // ── WATCHDOG: détecte les connexions zombie ───────────────
-      // Toutes les 45s, envoie un ping léger à WhatsApp.
-      // Si ça échoue, la session est zombie → reconnexion forcée.
+      // Envoie immédiatement le statut "disponible"
+      try { await sock.sendPresenceUpdate('available'); } catch (_) {}
+
+      // ── WATCHDOG (toutes les 30s) ────────────────────────────
+      // Vérifie d'abord l'état WebSocket BRUT (sock.ws.readyState).
+      // Si le WS n'est pas OPEN → zombie détecté sans attendre d'erreur.
+      // Ensuite envoie un presence update pour maintenir le compte EN LIGNE.
       clearWatchdog(sanitized);
       const wd = setInterval(async () => {
         if (!store.getSession(sanitized)) { clearWatchdog(sanitized); return; }
+
+        // --- Vérification 1 : état WebSocket brut ---
+        const wsState = sock.ws?.readyState;
+        if (wsState !== WS_OPEN) {
+          forceReconnect(sanitized, sock, `Watchdog: WS état=${wsState} (pas OPEN)`);
+          return;
+        }
+
+        // --- Vérification 2 : ping applicatif + maintien en ligne ---
         try {
           await sock.sendPresenceUpdate('available');
         } catch (e) {
-          console.log(`[${sanitized}] 🔴 Watchdog: connexion zombie détectée, reconnexion...`);
-          clearWatchdog(sanitized);
-          store.deleteSession(sanitized);
-          try { sock.end(new Error('watchdog')); } catch (_) {}
-          setTimeout(() => reconnectSession(sanitized), 3000);
+          forceReconnect(sanitized, sock, `Watchdog: presence update échoué (${e.message})`);
         }
-      }, 45000);
+      }, 30000); // 30 secondes
       watchdogs.set(sanitized, wd);
+
+      // ── KEEP-ALIVE PRESENCE (toutes les 5 min) ───────────────
+      // Maintient le bot "en ligne" même si le propriétaire n'a
+      // plus de forfait internet. Le bot tourne sur Render = indépendant.
+      clearPresenceTimer(sanitized);
+      const pt = setInterval(async () => {
+        if (!store.getSession(sanitized)) { clearPresenceTimer(sanitized); return; }
+        try {
+          await sock.sendPresenceUpdate('available');
+        } catch (_) {}
+      }, 5 * 60 * 1000); // 5 minutes
+      presenceTimers.set(sanitized, pt);
 
       return;
     }
@@ -167,24 +208,26 @@ async function startSession(number) {
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const reason = lastDisconnect?.error?.output?.payload?.error || statusCode;
-      console.log(`[${sanitized}] Connection closed. Reason: ${reason} (code: ${statusCode})`);
+      console.log(`[${sanitized}] Connexion fermée. Raison: ${reason} (code: ${statusCode})`);
 
       clearWatchdog(sanitized);
+      clearPresenceTimer(sanitized);
       pendingSockets.delete(sanitized);
 
       if (statusCode === DisconnectReason.loggedOut) {
+        // Déconnexion volontaire WhatsApp → supprimer la session
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
         msgCaches.delete(sanitized);
-        console.log(`[${sanitized}] Session deleted (logout)`);
+        console.log(`[${sanitized}] Session supprimée (logout)`);
       } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
-        console.log(`[${sanitized}] Restart required, reconnecting in 2s...`);
+        console.log(`[${sanitized}] Redémarrage requis, reconnexion dans 2s...`);
         setTimeout(() => reconnectSession(sanitized), 2000);
       } else if (statusCode === 408 || statusCode === 503) {
-        console.log(`[${sanitized}] Timeout/Unavailable, reconnecting in 10s...`);
+        console.log(`[${sanitized}] Timeout/Indisponible, reconnexion dans 10s...`);
         setTimeout(() => reconnectSession(sanitized), 10000);
       } else {
-        console.log(`[${sanitized}] Reconnecting in 5s...`);
+        console.log(`[${sanitized}] Reconnexion dans 5s...`);
         setTimeout(() => reconnectSession(sanitized), 5000);
       }
     }
@@ -193,14 +236,14 @@ async function startSession(number) {
   if (!sock.authState.creds.registered) {
     await delay(3000);
     try {
-      console.log(`[${sanitized}] Requesting pairing code (version ${version.join('.')})...`);
+      console.log(`[${sanitized}] Demande de code de jumelage (version ${version.join('.')})...`);
       const code = await sock.requestPairingCode(sanitized);
       const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
       console.log(`[${sanitized}] ✅ Code: ${formattedCode}`);
 
       setTimeout(() => {
         if (pendingSockets.has(sanitized)) {
-          console.log(`[${sanitized}] Pairing timeout (5min), cleaning pending socket`);
+          console.log(`[${sanitized}] Timeout jumelage (5min), nettoyage socket en attente`);
           pendingSockets.delete(sanitized);
         }
       }, 5 * 60 * 1000);
@@ -208,7 +251,7 @@ async function startSession(number) {
       return { sock, code: formattedCode };
     } catch (err) {
       const realError = err?.message || String(err);
-      console.error(`[${sanitized}] requestPairingCode error:`, realError);
+      console.error(`[${sanitized}] requestPairingCode erreur:`, realError);
       pendingSockets.delete(sanitized);
       try { sock.end(); } catch (_) {}
       throw new Error(`Pairing code failed: ${realError}`);
@@ -222,12 +265,19 @@ async function startSession(number) {
 
 async function reconnectSession(sanitized) {
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
-  if (!fs.existsSync(sessionPath)) return;
-  if (store.getSession(sanitized)) return;
+  if (!fs.existsSync(sessionPath)) {
+    console.log(`[${sanitized}] Pas de session sur disque, abandon reconnexion.`);
+    return;
+  }
+  if (store.getSession(sanitized)) {
+    console.log(`[${sanitized}] Session déjà active, pas de reconnexion.`);
+    return;
+  }
+  console.log(`[${sanitized}] Reconnexion avec la session existante...`);
   try {
     await startSession(sanitized);
   } catch (e) {
-    console.error(`[${sanitized}] Reconnection error:`, e.message);
+    console.error(`[${sanitized}] Erreur reconnexion:`, e.message);
     setTimeout(() => reconnectSession(sanitized), 15000);
   }
 }
@@ -238,13 +288,13 @@ async function startExistingSessions() {
     const p = path.join(config.SESSION_BASE_PATH, d);
     return fs.statSync(p).isDirectory() && fs.readdirSync(p).length > 0;
   });
-  console.log(`[BOT] ${dirs.length} existing session(s) to restore`);
+  console.log(`[BOT] ${dirs.length} session(s) à restaurer`);
   for (const dir of dirs) {
     try {
       await startSession(dir);
       await delay(2000);
     } catch (e) {
-      console.error(`[BOT] Session error ${dir}:`, e.message);
+      console.error(`[BOT] Erreur session ${dir}:`, e.message);
     }
   }
 }
