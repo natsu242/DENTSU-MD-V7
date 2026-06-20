@@ -50,28 +50,7 @@ async function setupStatusHandlers(sock) {
     }
   });
 
-  // Anti-delete handler
-  const deletedMessages = new Map();
-  sock.ev.on('messages.upsert', ({ messages }) => {
-    messages.forEach(m => {
-      if (m.message) deletedMessages.set(m.key.id, m);
-    });
-  });
 
-  sock.ev.on('messages.delete', async ({ keys }) => {
-    if (!keys?.length) return;
-    const key = keys[0];
-    const cached = deletedMessages.get(key.id);
-    if (!cached) return;
-    const ownerJid = config.OWNER_NUMBER + '@s.whatsapp.net';
-    try {
-      const from = cached.key.remoteJid;
-      const sender = cached.key.participant || from;
-      await sock.sendMessage(ownerJid, {
-        text: `🗑️ *Message supprimé détecté*\n\n📍 Chat: ${from}\n👤 De: @${sender.split('@')[0]}\n⏰ ${new Date().toLocaleString()}\n\n${config.BOT_FOOTER}`,
-      });
-    } catch(e) {}
-  });
 }
 
 module.exports = { setupStatusHandlers };
