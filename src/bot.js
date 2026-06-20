@@ -6,7 +6,6 @@ const {
   makeCacheableSignalKeyStore,
   Browsers,
   delay,
-  makeInMemoryStore,
 } = require('baileys');
 const pino = require('pino');
 const fs = require('fs-extra');
@@ -17,13 +16,9 @@ const { messageHandler } = require('./handlers/message');
 const { setupStatusHandlers } = require('./handlers/status');
 
 const logger = pino({ level: 'silent' });
-
 const pendingSockets = new Map();
-
-// Per-session message cache — lets Baileys respond to WhatsApp retries
-// Without this, WhatsApp repeatedly asks for message keys, Baileys can't
-// answer, and messages.upsert silently stops firing after a few minutes.
 const msgCaches = new Map();
+const watchdogs = new Map();
 
 const FALLBACK_VERSION = [2, 3000, 1023596128];
 
@@ -44,6 +39,13 @@ function getBrowserValue() {
   return ['Ubuntu', 'Chrome', '22.0.0'];
 }
 
+function clearWatchdog(sanitized) {
+  if (watchdogs.has(sanitized)) {
+    clearInterval(watchdogs.get(sanitized));
+    watchdogs.delete(sanitized);
+  }
+}
+
 async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
@@ -60,7 +62,6 @@ async function startSession(number) {
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
   const version = await getVersion();
 
-  // Per-session message retry counter + cache
   const msgRetryCounterMap = new Map();
   if (!msgCaches.has(sanitized)) msgCaches.set(sanitized, new Map());
   const msgCache = msgCaches.get(sanitized);
@@ -76,13 +77,11 @@ async function startSession(number) {
     browser: getBrowserValue(),
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 60000,
-    keepAliveIntervalMs: 10000,
-    retryRequestDelayMs: 500,
-    generateHighQualityLinkPreview: true,
+    keepAliveIntervalMs: 15000,
+    retryRequestDelayMs: 250,
+    generateHighQualityLinkPreview: false,
     markOnlineOnConnect: false,
     syncFullHistory: false,
-    // KEY FIX: without getMessage, WhatsApp retries go unanswered and
-    // messages.upsert stops firing — bot stays "connected" but goes deaf.
     msgRetryCounterMap,
     getMessage: async (key) => {
       const cached = msgCache.get(key.id);
@@ -92,28 +91,25 @@ async function startSession(number) {
   });
 
   pendingSockets.set(sanitized, sock);
-
   sock.ev.on('creds.update', saveCreds);
 
-  // Cache every outgoing/incoming message so getMessage can serve retries
   sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
     for (const m of msgs) {
       if (m.message && m.key?.id) {
         msgCache.set(m.key.id, m.message);
-        // Keep cache bounded — drop oldest entries beyond 500
         if (msgCache.size > 500) {
-          const firstKey = msgCache.keys().next().value;
-          msgCache.delete(firstKey);
+          msgCache.delete(msgCache.keys().next().value);
         }
       }
     }
-    try { await messageHandler(sock, { messages: msgs, type }); }
-    catch (e) { console.error(`[${sanitized}] messageHandler error:`, e.message); }
+    // Fire-and-forget per batch — does not block next upsert event
+    messageHandler(sock, { messages: msgs, type }).catch(e =>
+      console.error(`[${sanitized}] messageHandler error:`, e.message)
+    );
   });
 
   setupStatusHandlers(sock);
 
-  // ── Group events: Welcome / Goodbye ────────────────────────────
   sock.ev.on('group-participants.update', async (update) => {
     try {
       const { id, participants, action } = update;
@@ -147,19 +143,35 @@ async function startSession(number) {
       pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
 
-      // Auto-follow newsletters + auto-join groupe supprimés (rate-limit → déconnexion)
+      // ── WATCHDOG: détecte les connexions zombie ───────────────
+      // Toutes les 45s, envoie un ping léger à WhatsApp.
+      // Si ça échoue, la session est zombie → reconnexion forcée.
+      clearWatchdog(sanitized);
+      const wd = setInterval(async () => {
+        if (!store.getSession(sanitized)) { clearWatchdog(sanitized); return; }
+        try {
+          await sock.sendPresenceUpdate('available');
+        } catch (e) {
+          console.log(`[${sanitized}] 🔴 Watchdog: connexion zombie détectée, reconnexion...`);
+          clearWatchdog(sanitized);
+          store.deleteSession(sanitized);
+          try { sock.end(new Error('watchdog')); } catch (_) {}
+          setTimeout(() => reconnectSession(sanitized), 3000);
+        }
+      }, 45000);
+      watchdogs.set(sanitized, wd);
 
       return;
     }
 
     if (connection === 'close') {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const reason     = lastDisconnect?.error?.output?.payload?.error || statusCode;
+      const reason = lastDisconnect?.error?.output?.payload?.error || statusCode;
       console.log(`[${sanitized}] Connection closed. Reason: ${reason} (code: ${statusCode})`);
 
+      clearWatchdog(sanitized);
       pendingSockets.delete(sanitized);
 
-      // 401 retiré — un 401 réseau n'est pas un vrai logout
       if (statusCode === DisconnectReason.loggedOut) {
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
@@ -169,7 +181,7 @@ async function startSession(number) {
         console.log(`[${sanitized}] Restart required, reconnecting in 2s...`);
         setTimeout(() => reconnectSession(sanitized), 2000);
       } else if (statusCode === 408 || statusCode === 503) {
-        console.log(`[${sanitized}] Timeout/Service unavailable, reconnecting in 10s...`);
+        console.log(`[${sanitized}] Timeout/Unavailable, reconnecting in 10s...`);
         setTimeout(() => reconnectSession(sanitized), 10000);
       } else {
         console.log(`[${sanitized}] Reconnecting in 5s...`);
@@ -182,7 +194,7 @@ async function startSession(number) {
     await delay(3000);
     try {
       console.log(`[${sanitized}] Requesting pairing code (version ${version.join('.')})...`);
-      const code          = await sock.requestPairingCode(sanitized);
+      const code = await sock.requestPairingCode(sanitized);
       const formattedCode = code?.match(/.{1,4}/g)?.join('-') || code;
       console.log(`[${sanitized}] ✅ Code: ${formattedCode}`);
 
