@@ -26,7 +26,7 @@ services:
       - key: TELEGRAM
         value: "https://t.me/Natsu_or_Dentsu"
       - key: WEBSITE
-        value: "https://w.dev/NatsuorDentsu"
+        value: "https://dentsu-md-v7.onrender.com"
       - key: MAX_SESSIONS
         value: "50"
       - key: NODE_ENV
