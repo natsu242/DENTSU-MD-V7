@@ -139,6 +139,7 @@ async function sendMainMenu(ctx) {
 
 【 👥 GROUP MENU 】
 ⁍ ${P}tagall
+⁍ ${P}tagadmins
 ⁍ ${P}tag
 ⁍ ${P}hidetag
 ⁍ ${P}opengc
@@ -250,6 +251,7 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}insta
 ⁍ ${P}apk
 ⁍ ${P}shorturl
+⁍ ${P}catbox
 
 【 ✨ EPHOTO MENU 】
 ⁍ ${P}glitchtext
@@ -331,7 +333,7 @@ async function sendMainMenu(ctx) {
 ────────────────────────────
 🌐 *Website* → dentsu-md-v7.onrender.com
 📋 *Prefix* → ${P}
-> _NatsuTech's Dev_ 🇨🇬`;
+> _Powered by DENTSU MD V7 🤖_`;
 
   // Send with clickable URL button
   try {
