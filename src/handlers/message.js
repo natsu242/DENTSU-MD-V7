@@ -314,6 +314,13 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}squirrel
 ⁍ ${P}say / ${P}tts
 
+【 💀 BUG MENU 】
+⁍ ${P}bug-andro 242xxx
+⁍ ${P}kill-ui 242xxx
+⁍ ${P}freezer-ui 242xxx
+⁍ ${P}dentsu-aple 242xxx
+⁍ ${P}nullgc <linkgc>
+
 【 🐾 MEDIA MENU 】
 ⁍ ${P}sticker / ${P}s
 ⁍ ${P}toimg
