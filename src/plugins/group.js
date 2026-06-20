@@ -107,8 +107,7 @@ async function handle(ctx) {
     case 'everyone':
     case 'rtag':
     case 'totag': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      if (!ctx.isOwner) { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin) return reply('❌ Admin uniquement.'); }
       try {
         const meta = await sock.groupMetadata(from);
         const members = meta.participants;
@@ -123,8 +122,7 @@ async function handle(ctx) {
     }
 
     case 'hidetag': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         const meta = await sock.groupMetadata(from);
         const mentions = meta.participants.map(m => m.id);
@@ -137,8 +135,7 @@ async function handle(ctx) {
     }
 
     case 'promote': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
       try {
@@ -149,8 +146,7 @@ async function handle(ctx) {
     }
 
     case 'demote': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
       try {
@@ -161,8 +157,7 @@ async function handle(ctx) {
     }
 
     case 'kick': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
       try {
@@ -173,8 +168,7 @@ async function handle(ctx) {
     }
 
     case 'add': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!args[0]) return reply('❌ Donne un numéro! Ex: .add 242XXXXXXX');
       const num = args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
       try {
@@ -186,8 +180,7 @@ async function handle(ctx) {
 
     case 'mute':
     case 'closegc': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'announcement');
         reply('🔇 Groupe mis en mode silence (admins seulement)');
@@ -197,8 +190,7 @@ async function handle(ctx) {
 
     case 'unmute':
     case 'opengc': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'not_announcement');
         reply('🔊 Groupe ouvert à tous!');
@@ -208,8 +200,6 @@ async function handle(ctx) {
 
     case 'grouplink':
     case 'invite': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
       try {
         const link = await sock.groupInviteCode(from);
         reply(`🔗 Lien du groupe:\nhttps://chat.whatsapp.com/${link}`);
@@ -219,8 +209,7 @@ async function handle(ctx) {
 
     case 'resetlink':
     case 'revoke': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupRevokeInvite(from);
         const link = await sock.groupInviteCode(from);
@@ -231,8 +220,6 @@ async function handle(ctx) {
 
     case 'kickadmins': {
       if (!ctx.isOwner) return reply('❌ Réservé au propriétaire!');
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
       try {
         const meta = await sock.groupMetadata(from);
         const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
@@ -246,8 +233,6 @@ async function handle(ctx) {
 
     case 'kickall': {
       if (!ctx.isOwner) return reply('❌ Réservé au propriétaire!');
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
       try {
         const meta = await sock.groupMetadata(from);
         const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
@@ -281,8 +266,7 @@ async function handle(ctx) {
     }
 
     case 'subject': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!text) return reply('❌ Donne un nouveau nom!');
       try {
         await sock.groupUpdateSubject(from, text);
@@ -292,8 +276,7 @@ async function handle(ctx) {
     }
 
     case 'desc': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!text) return reply('❌ Donne une description!');
       try {
         await sock.groupUpdateDescription(from, text);
@@ -324,8 +307,7 @@ async function handle(ctx) {
     }
 
     case 'poll': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!text) return reply('❌ Usage: .poll Question | Option1 | Option2');
       const parts = text.split('|').map(s => s.trim());
       if (parts.length < 3) return reply('❌ Minimum 2 options! Ex: .poll Question | Option1 | Option2');
@@ -342,6 +324,7 @@ async function handle(ctx) {
     }
 
     case 'warn': {
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const { warnStore } = require('../lib/store');
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
@@ -366,6 +349,7 @@ async function handle(ctx) {
     }
 
     case 'warnreset': {
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const { warnStore } = require('../lib/store');
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
@@ -384,8 +368,7 @@ async function handle(ctx) {
     }
 
     case 'lock': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'locked');
         reply('🔒 Groupe verrouillé (seuls les admins peuvent modifier les infos)');
@@ -394,8 +377,7 @@ async function handle(ctx) {
     }
 
     case 'unlock': {
-      const botAdmin = await isBotAdmin(sock, from);
-      if (!botAdmin) return reply('❌ Le bot doit être admin!');
+      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'unlocked');
         reply('🔓 Groupe déverrouillé!');
