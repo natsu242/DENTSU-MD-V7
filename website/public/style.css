@@ -457,3 +457,87 @@ button[type="submit"]:disabled {
   .code-value { font-size: 1.6rem; letter-spacing: 4px; }
   .lang-btn { padding: 14px 20px; min-width: 90px; }
 }
+
+/* ═══ DEPLOY SECTION ═══ */
+.deploy-card {
+  margin-top: 20px;
+}
+
+.deploy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+  margin-bottom: 16px;
+}
+
+.deploy-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  text-decoration: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  transition: all 0.2s;
+  color: #fff;
+}
+
+.deploy-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(0,230,118,0.4);
+}
+
+.deploy-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.deploy-btn div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deploy-btn strong {
+  font-size: 0.9rem;
+  color: #fff;
+}
+
+.deploy-btn small {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.render-btn  { border-left: 3px solid #7b5ea7; }
+.railway-btn { border-left: 3px solid #e10f3a; }
+.koyeb-btn   { border-left: 3px solid #00e676; }
+.cyclic-btn  { border-left: 3px solid #00b4d8; }
+.replit-btn  { border-left: 3px solid #f05033; }
+.glitch-btn  { border-left: 3px solid #3333ff; }
+.heroku-btn  { border-left: 3px solid #6762a6; }
+.vps-btn     { border-left: 3px solid #888; }
+
+.deploy-tip {
+  background: rgba(0,230,118,0.06);
+  border: 1px solid rgba(0,230,118,0.15);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.deploy-tip code {
+  background: rgba(0,230,118,0.15);
+  color: var(--green);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+@media (max-width: 400px) {
+  .deploy-grid { grid-template-columns: 1fr; }
+}
