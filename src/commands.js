@@ -760,7 +760,6 @@ async function handleCommand(ctx) {
       const search = await yts(text);
       const result = search.all?.[0];
       if (!result) return reply('❌ No results found.');
-      const ytdl = require('@distube/ytdl-core');
       const res = await axios.get(`https://api.bk9.dev/download/ytmp3?url=${encodeURIComponent(result.url)}`);
       const mp3 = res.data?.BK9?.downloadUrl || res.data?.downloadUrl;
       if (!mp3) return reply('❌ Download failed. Try again.');
@@ -862,12 +861,23 @@ async function handleCommand(ctx) {
 
   case 's':
   case 'sticker': {
-    const qMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage || msg.message;
-    if (!qMsg) return reply('❌ Reply to an image or video.');
+    // Support: reply to image OR send image with .s as caption
+    const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+    const directImg = msg.message?.imageMessage;
+    const targetMsg = quotedMsg ? { message: quotedMsg, key: { remoteJid: from, id: msg.message?.extendedTextMessage?.contextInfo?.stanzaId || msg.key.id, fromMe: false } } : directImg ? msg : null;
+    const targetType = quotedMsg ? Object.keys(quotedMsg)[0] : directImg ? 'imageMessage' : null;
+    if (!targetMsg || !['imageMessage','videoMessage','stickerMessage'].includes(targetType))
+      return reply('❌ Reply to an image with .s, or send an image with .s as caption.');
     try {
-      const buf = await downloadMediaMessage({ message: qMsg, key: msg.key }, 'buffer', {});
-      await sock.sendMessage(from, { sticker: buf }, { quoted: msg });
-    } catch (e) { await reply(`❌ Sticker creation failed: ${e.message}`); }
+      fs.ensureDirSync('./tmp');
+      const buf = await downloadMediaMessage(targetMsg, 'buffer', {});
+      const sharp = require('sharp');
+      const webp = await sharp(buf)
+        .resize(512, 512, { fit: 'contain', background: { r:0, g:0, b:0, alpha:0 } })
+        .webp({ quality: 80 })
+        .toBuffer();
+      await sock.sendMessage(from, { sticker: webp }, { quoted: msg });
+    } catch (e) { await reply(`❌ Sticker error: ${e.message}`); }
     return true;
   }
 
@@ -1133,8 +1143,229 @@ async function handleCommand(ctx) {
     return true;
   }
 
+
+  // ════════════════════════════════════════════════════════════════
+  // 👥 MISSING GROUP COMMANDS
+  // ════════════════════════════════════════════════════════════════
+
+  case 'opengc': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin && !isOwner) return reply('❌ Admins only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    await sock.groupSettingUpdate(from, 'not_announcement');
+    await reply('🔓 Group is now *open*! Everyone can send messages.');
+    return true;
+  }
+
+  case 'closegc': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin && !isOwner) return reply('❌ Admins only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    await sock.groupSettingUpdate(from, 'announcement');
+    await reply('🔒 Group is now *closed*! Only admins can send messages.');
+    return true;
+  }
+
+  case 'announce': {
+    if (!isGroup) return reply('❌ Group only.');
+    if (!isAdmin && !isOwner) return reply('❌ Admins only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    await sock.groupSettingUpdate(from, 'announcement');
+    await reply('📢 *Announcement mode ON!* Only admins can send messages.');
+    return true;
+  }
+
+  case 'kickall': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const nonAdmins = participants.filter(p => !p.admin && p.id !== botId);
+    if (!nonAdmins.length) return reply('ℹ️ No non-admin members to kick.');
+    await reply(`⏳ Kicking ${nonAdmins.length} members...`);
+    let kicked = 0;
+    for (const p of nonAdmins) {
+      try { await sock.groupParticipantsUpdate(from, [p.id], 'remove'); kicked++; await new Promise(r => setTimeout(r, 500)); } catch (_) {}
+    }
+    await reply(`✅ Done! Kicked ${kicked}/${nonAdmins.length} members.`);
+    return true;
+  }
+
+  case 'kickall2': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!isGroup) return reply('❌ Group only.');
+    if (!groupAdmins) return reply('❌ Bot must be admin first!');
+    const members = participants.filter(p => p.id !== botId && p.id !== sender);
+    if (!members.length) return reply('ℹ️ No members to kick.');
+    await reply(`⏳ Kicking ALL ${members.length} members (except you)...`);
+    let kicked = 0;
+    for (const p of members) {
+      try { await sock.groupParticipantsUpdate(from, [p.id], 'remove'); kicked++; await new Promise(r => setTimeout(r, 500)); } catch (_) {}
+    }
+    await reply(`✅ Done! Kicked ${kicked}/${members.length} members.`);
+    return true;
+  }
+
+  case 'listonline':
+  case 'members': {
+    if (!isGroup) return reply('❌ Group only.');
+    const list = participants.map((p, i) => `${i+1}. @${p.id.split('@')[0]}${p.admin ? ' 👑' : ''}`).join('\n');
+    await sock.sendMessage(from, { text: `👥 *Group Members (${participants.length}):*\n\n${list}`, mentions: participants.map(p => p.id) }, { quoted: msg });
+    return true;
+  }
+
+  case 'tagadmins': {
+    if (!isGroup) return reply('❌ Group only.');
+    const admins = participants.filter(p => p.admin);
+    if (!admins.length) return reply('❌ No admins found.');
+    const tagText = text || '👑 Attention Admins!';
+    let teks = `📢 *${tagText}*\n\n`;
+    for (const a of admins) teks += `@${a.id.split('@')[0]}\n`;
+    await sock.sendMessage(from, { text: teks, mentions: admins.map(a => a.id) }, { quoted: msg });
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 👑 MISSING OWNER COMMANDS
+  // ════════════════════════════════════════════════════════════════
+
+  case 'pair':
+  case 'connect': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const WEBSITE = process.env.WEBSITE || 'dentsu-md-v7.onrender.com';
+    const websiteUrl = WEBSITE.startsWith('http') ? WEBSITE : 'https://' + WEBSITE;
+    await reply(`🔗 *Bot Pairing Link:*\n${websiteUrl}\n\n_Open this link, enter your WhatsApp number with country code, and follow the steps to connect the bot._`);
+    return true;
+  }
+
+  case 'setname': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .setname New Bot Name');
+    try {
+      await sock.updateProfileName(text);
+      await reply(`✅ Bot name updated to: *${text}*`);
+    } catch (e) { await reply(`❌ Failed to update name: ${e.message}`); }
+    return true;
+  }
+
+  case 'setbio': {
+    if (!isOwner) return reply('❌ Owner only.');
+    if (!text) return reply('❌ Usage: .setbio Your new status here');
+    try {
+      await sock.updateProfileStatus(text);
+      await reply(`✅ Bot bio updated to: *${text}*`);
+    } catch (e) { await reply(`❌ Failed to update bio: ${e.message}`); }
+    return true;
+  }
+
+  case 'ban': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const mentioned = getMentioned(msg);
+    const target = mentioned[0] || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    if (!target || target === '@s.whatsapp.net') return reply('❌ Tag or provide a number to ban.');
+    await sock.updateBlockStatus(target, 'block');
+    await reply(`✅ @${target.split('@')[0]} has been *banned*.`);
+    return true;
+  }
+
+  case 'unban': {
+    if (!isOwner) return reply('❌ Owner only.');
+    const mentioned = getMentioned(msg);
+    const target = mentioned[0] || (text.replace(/[^0-9]/g,'') + '@s.whatsapp.net');
+    if (!target || target === '@s.whatsapp.net') return reply('❌ Tag or provide a number to unban.');
+    await sock.updateBlockStatus(target, 'unblock');
+    await reply(`✅ @${target.split('@')[0]} has been *unbanned*.`);
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 🖼️ MISSING AI/MEDIA COMMANDS
+  // ════════════════════════════════════════════════════════════════
+
+  case 'photoai': {
+    if (!text) return reply('❌ Usage: .photoai a beautiful sunset');
+    try {
+      await reply('⏳ Generating AI photo...');
+      const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(text)}?width=1024&height=1024&nologo=true`;
+      await sock.sendMessage(from, { image: { url }, caption: `🎨 *AI Photo:* ${text}\n_Powered by DENTSU MD V7_` }, { quoted: msg });
+    } catch (e) { await reply(`❌ Photo AI error: ${e.message}`); }
+    return true;
+  }
+
+  case 'catbox': {
+    try {
+      await reply('⏳ Uploading to Catbox...');
+      const FormData = require('form-data');
+      let fd = new FormData();
+      // If user replied to a media message — upload the file
+      const qMsg2 = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+      if (qMsg2) {
+        const buf2 = await downloadMediaMessage({ message: qMsg2, key: msg.key }, 'buffer', {});
+        const mtype2 = Object.keys(qMsg2)[0];
+        const ext = mtype2 === 'imageMessage' ? '.jpg' : mtype2 === 'videoMessage' ? '.mp4' : mtype2 === 'audioMessage' ? '.mp3' : '.bin';
+        const tmpPath = `./tmp/catbox_${Date.now()}${ext}`;
+        fs.ensureDirSync('./tmp');
+        fs.writeFileSync(tmpPath, buf2);
+        fd.append('reqtype', 'fileupload');
+        fd.append('fileToUpload', fs.createReadStream(tmpPath));
+        const res = await axios.post('https://catbox.moe/user.php', fd, { headers: fd.getHeaders() });
+        fs.unlinkSync(tmpPath);
+        await reply(`✅ *Uploaded to Catbox!*\n🔗 ${res.data}`);
+      } else if (text) {
+        // URL upload mode
+        fd.append('reqtype', 'urlupload');
+        fd.append('url', text);
+        const res = await axios.post('https://catbox.moe/user.php', fd, { headers: fd.getHeaders() });
+        await reply(`✅ *Uploaded to Catbox!*\n🔗 ${res.data}`);
+      } else {
+        return reply('❌ Reply to a file/image/video or provide a URL.\nExample: .catbox https://example.com/file.jpg');
+      }
+    } catch (e) { await reply(`❌ Catbox upload failed: ${e.message}`); }
+    return true;
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // 🎮 MISSING GAME COMMANDS
+  // ════════════════════════════════════════════════════════════════
+
+  case 'rpsls': {
+    const rlsChoices = ['rock','paper','scissors','lizard','spock'];
+    const userRlsChoice = (text || '').toLowerCase().trim();
+    if (!rlsChoices.includes(userRlsChoice))
+      return reply(`❌ Choose one:\n*rock, paper, scissors, lizard, spock*\nExample: .rpsls rock`);
+    const botRlsChoice = rlsChoices[Math.floor(Math.random() * 5)];
+    const rlsWins = { rock:['scissors','lizard'], paper:['rock','spock'], scissors:['paper','lizard'], lizard:['paper','spock'], spock:['scissors','rock'] };
+    const rlsResult = userRlsChoice === botRlsChoice ? '🤝 It\'s a Tie!' : rlsWins[userRlsChoice].includes(botRlsChoice) ? '🎉 You Win!' : '😢 Bot Wins!';
+    await reply(`🎮 *RPSLS Battle!*\n\n👤 You: *${userRlsChoice}*\n🤖 Bot: *${botRlsChoice}*\n\n${rlsResult}`);
+    return true;
+  }
+
+  case 'hangman': {
+    const hWords = ['javascript','whatsapp','dentsu','programming','developer','chatbot','database','algorithm','network','computer','football','basketball','smartphone','television','keyboard'];
+    const hWord = hWords[Math.floor(Math.random() * hWords.length)];
+    const masked = hWord.split('').map((c, i) => i === 0 || i === hWord.length-1 ? c : '_').join(' ');
+    await reply(`🎮 *Hangman!*\n\n${' _ '.repeat(hWord.length)}\nLetters: *${hWord.length}*\nFirst letter: *${hWord[0]}*\nLast letter: *${hWord[hWord.length-1]}*\n\n_Try to guess the word!_\n\n||Answer: ${hWord}||`);
+    return true;
+  }
+
+  case 'tictactoe': {
+    if (!text) {
+      const grid = `1 | 2 | 3\n--+---+--\n4 | 5 | 6\n--+---+--\n7 | 8 | 9`;
+      return reply(`🎮 *Tic-Tac-Toe!*\n\n${grid}\n\n_Send .tictactoe [1-9] to place your X._`);
+    }
+    const pos = parseInt(text);
+    if (isNaN(pos) || pos < 1 || pos > 9) return reply('❌ Choose a position from 1 to 9.');
+    const tttBoard = ['1','2','3','4','5','6','7','8','9'];
+    tttBoard[pos - 1] = 'X';
+    const available = tttBoard.filter(v => v !== 'X');
+    if (available.length) tttBoard[tttBoard.indexOf(available[Math.floor(Math.random() * available.length)])] = 'O';
+    const g = tttBoard;
+    const grid = `${g[0]} | ${g[1]} | ${g[2]}\n--+---+--\n${g[3]} | ${g[4]} | ${g[5]}\n--+---+--\n${g[6]} | ${g[7]} | ${g[8]}`;
+    await reply(`🎮 *Tic-Tac-Toe!*\n\n${grid}\n\n👤 You: *X* | 🤖 Bot: *O*`);
+    return true;
+  }
+
   default:
-    return false; // Command not handled
+    return false;
   }
 }
 
