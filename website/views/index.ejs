@@ -9,7 +9,7 @@
 <body>
   <div class="bg-glow"></div>
 
-  <!-- ═══ ÉCRAN DE SÉLECTION DE LANGUE ═══ -->
+  <!-- ═══ LANGUE ═══ -->
   <div id="langOverlay" class="lang-overlay">
     <div class="lang-card">
       <img src="<%= menuImage %>" alt="Bot" class="lang-bot-image" onerror="this.style.display='none'">
@@ -17,40 +17,37 @@
       <p class="lang-subtitle">by <%= devName %></p>
       <p class="lang-choose">Choisissez votre langue / Choose your language</p>
       <div class="lang-buttons">
-        <button class="lang-btn" onclick="setLang('fr')">
-          🇫🇷 <span>Français</span>
-        </button>
-        <button class="lang-btn" onclick="setLang('en')">
-          🇺🇸 <span>English</span>
-        </button>
+        <button class="lang-btn" onclick="setLang('fr')">🇫🇷 <span>Français</span></button>
+        <button class="lang-btn" onclick="setLang('en')">🇺🇸 <span>English</span></button>
       </div>
     </div>
   </div>
 
   <!-- ═══ PAGE PRINCIPALE ═══ -->
   <div class="container" id="mainContent" style="display:none;">
-    <!-- Sélecteur de langue en haut -->
+
+    <!-- Switcher langue -->
     <div class="lang-switcher">
       <button onclick="setLang('fr')" id="btnFr" class="lang-switch-btn active-lang">🇫🇷 FR</button>
       <span class="lang-sep">|</span>
       <button onclick="setLang('en')" id="btnEn" class="lang-switch-btn">🇺🇸 EN</button>
     </div>
 
-    <!-- Header -->
+    <!-- Header — sans compteur de sessions -->
     <div class="header">
       <img src="<%= menuImage %>" alt="Menu" class="bot-image" onerror="this.style.display='none'">
       <h1 class="bot-name">🤖 <%= botName %></h1>
       <p class="dev-name">by <%= devName %></p>
-      <div class="session-badge">
-        <span class="dot"></span>
-        <span><%= sessions %>/<%= maxSessions %> <span data-fr="sessions actives" data-en="active sessions">sessions actives</span></span>
-      </div>
     </div>
 
-    <!-- Card principale -->
+    <!-- Card connexion -->
     <div class="card">
       <h2 data-fr="📱 Connecter WhatsApp" data-en="📱 Connect WhatsApp">📱 Connecter WhatsApp</h2>
-      <p class="subtitle" data-fr="Entre ton numéro avec le code pays pour obtenir ton code de jumelage" data-en="Enter your number with country code to get your pairing code">Entre ton numéro avec le code pays pour obtenir ton code de jumelage</p>
+      <p class="subtitle"
+         data-fr="Entre ton numéro avec le code pays pour obtenir ton code de jumelage"
+         data-en="Enter your number with country code to get your pairing code">
+        Entre ton numéro avec le code pays pour obtenir ton code de jumelage
+      </p>
 
       <form id="pairForm">
         <div class="input-group">
@@ -66,29 +63,138 @@
             inputmode="numeric"
           >
         </div>
-        <p class="hint" data-fr="⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)" data-en="⚠️ Include country code without + (e.g. <strong>242</strong>XXXXXXXX)">⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)</p>
-        <button id="pairBtn" type="submit" data-fr="📲 Obtenir mon code" data-en="📲 Get my code">📲 Obtenir mon code</button>
+        <p class="hint"
+           data-fr="⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)"
+           data-en="⚠️ Include country code without + (e.g. <strong>242</strong>XXXXXXXX)">
+          ⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)
+        </p>
+        <button id="pairBtn" type="submit"
+                data-fr="📲 Obtenir mon code"
+                data-en="📲 Get my code">📲 Obtenir mon code</button>
       </form>
 
-      <!-- Résultat -->
       <div id="result" style="display:none;" class="result"></div>
 
-      <!-- Affichage du code -->
       <div id="codeDisplay" style="display:none;" class="code-box">
-        <p class="code-label" data-fr="🔑 Ton code de jumelage :" data-en="🔑 Your pairing code:">🔑 Ton code de jumelage :</p>
+        <p class="code-label"
+           data-fr="🔑 Ton code de jumelage :"
+           data-en="🔑 Your pairing code:">🔑 Ton code de jumelage :</p>
         <div class="code-value" id="codeValue"></div>
-        <button id="copyBtn" class="copy-btn" data-fr="📋 Copier le code" data-en="📋 Copy code">📋 Copier le code</button>
+        <button id="copyBtn" class="copy-btn"
+                data-fr="📋 Copier le code"
+                data-en="📋 Copy code">📋 Copier le code</button>
       </div>
 
-      <!-- Étapes -->
       <div id="steps" style="display:none;" class="steps-box">
-        <h3 data-fr="📋 Comment entrer le code dans WhatsApp :" data-en="📋 How to enter the code in WhatsApp:">📋 Comment entrer le code dans WhatsApp :</h3>
-        <ol id="stepsList">
-          <!-- Steps injected by JS based on lang -->
-        </ol>
-        <div class="warning-box" data-fr="⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !" data-en="⏱️ The code expires in <strong>60 seconds</strong> — enter it quickly!">
+        <h3 data-fr="📋 Comment entrer le code dans WhatsApp :"
+            data-en="📋 How to enter the code in WhatsApp:">
+          📋 Comment entrer le code dans WhatsApp :
+        </h3>
+        <ol id="stepsList"></ol>
+        <div class="warning-box"
+             data-fr="⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !"
+             data-en="⏱️ The code expires in <strong>60 seconds</strong> — enter it quickly!">
           ⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ DÉPLOIEMENT SUR D'AUTRES PLATEFORMES ═══ -->
+    <div class="card deploy-card">
+      <h2 data-fr="🚀 Déployer le Bot" data-en="🚀 Deploy the Bot">🚀 Déployer le Bot</h2>
+      <p class="subtitle"
+         data-fr="Clique sur une plateforme, colle ton lien GitHub et lance le bot !"
+         data-en="Click a platform, paste your GitHub repo link and launch the bot!">
+        Clique sur une plateforme, colle ton lien GitHub et lance le bot !
+      </p>
+
+      <div class="deploy-grid">
+
+        <!-- Render -->
+        <a href="https://render.com/deploy" target="_blank" class="deploy-btn render-btn">
+          <span class="deploy-icon">🟣</span>
+          <div>
+            <strong>Render</strong>
+            <small data-fr="Gratuit • Facile" data-en="Free • Easy">Gratuit • Facile</small>
+          </div>
+        </a>
+
+        <!-- Railway -->
+        <a href="https://railway.app/new/template?template=https://github.com/natsu242/DENTSU-MD-V7"
+           target="_blank" class="deploy-btn railway-btn">
+          <span class="deploy-icon">🚄</span>
+          <div>
+            <strong>Railway</strong>
+            <small data-fr="5$/mois • Rapide" data-en="$5/mo • Fast">5$/mois • Rapide</small>
+          </div>
+        </a>
+
+        <!-- Koyeb -->
+        <a href="https://app.koyeb.com/deploy?type=git&repository=https://github.com/natsu242/DENTSU-MD-V7&branch=main&name=dentsu-md-v7"
+           target="_blank" class="deploy-btn koyeb-btn">
+          <span class="deploy-icon">⚡</span>
+          <div>
+            <strong>Koyeb</strong>
+            <small data-fr="Gratuit • Sans CB" data-en="Free • No CC">Gratuit • Sans CB</small>
+          </div>
+        </a>
+
+        <!-- Cyclic -->
+        <a href="https://app.cyclic.sh/api/app/deploy/natsu242/DENTSU-MD-V7"
+           target="_blank" class="deploy-btn cyclic-btn">
+          <span class="deploy-icon">🔄</span>
+          <div>
+            <strong>Cyclic</strong>
+            <small data-fr="Gratuit • Simple" data-en="Free • Simple">Gratuit • Simple</small>
+          </div>
+        </a>
+
+        <!-- Replit -->
+        <a href="https://replit.com/github/natsu242/DENTSU-MD-V7"
+           target="_blank" class="deploy-btn replit-btn">
+          <span class="deploy-icon">🟠</span>
+          <div>
+            <strong>Replit</strong>
+            <small data-fr="Gratuit • En ligne" data-en="Free • Online">Gratuit • En ligne</small>
+          </div>
+        </a>
+
+        <!-- Glitch -->
+        <a href="https://glitch.com/edit/#!/import/github/natsu242/DENTSU-MD-V7"
+           target="_blank" class="deploy-btn glitch-btn">
+          <span class="deploy-icon">🎨</span>
+          <div>
+            <strong>Glitch</strong>
+            <small data-fr="Gratuit • Rapide" data-en="Free • Quick">Gratuit • Rapide</small>
+          </div>
+        </a>
+
+        <!-- Heroku -->
+        <a href="https://heroku.com/deploy?template=https://github.com/natsu242/DENTSU-MD-V7"
+           target="_blank" class="deploy-btn heroku-btn">
+          <span class="deploy-icon">💜</span>
+          <div>
+            <strong>Heroku</strong>
+            <small data-fr="5$/mois • Stable" data-en="$5/mo • Stable">5$/mois • Stable</small>
+          </div>
+        </a>
+
+        <!-- VPS manuel -->
+        <a href="https://github.com/natsu242/DENTSU-MD-V7#readme"
+           target="_blank" class="deploy-btn vps-btn">
+          <span class="deploy-icon">🖥️</span>
+          <div>
+            <strong>VPS / Manuel</strong>
+            <small data-fr="Guide README" data-en="README Guide">Guide README</small>
+          </div>
+        </a>
+
+      </div>
+
+      <div class="deploy-tip">
+        <span data-fr="💡 Astuce : Sur chaque plateforme, ajoute la variable <code>SESSION_SECRET</code> dans les paramètres." data-en="💡 Tip: On each platform, add the <code>SESSION_SECRET</code> variable in the settings.">
+          💡 Astuce : Sur chaque plateforme, ajoute la variable <code>SESSION_SECRET</code> dans les paramètres.
+        </span>
       </div>
     </div>
 
@@ -99,17 +205,19 @@
       <% if (telegram) { %><a href="<%= telegram %>" target="_blank" class="social-btn">✈️ Telegram</a><% } %>
     </div>
 
-    <p class="footer" data-fr="© 2025 <%= devName %> • Tous droits réservés" data-en="© 2025 <%= devName %> • All rights reserved">© 2025 <%= devName %> • Tous droits réservés</p>
+    <p class="footer"
+       data-fr="© 2025 <%= devName %> • Tous droits réservés"
+       data-en="© 2025 <%= devName %> • All rights reserved">
+      © 2025 <%= devName %> • Tous droits réservés
+    </p>
   </div>
 
   <script src="/app.js"></script>
   <script>
     const codeInSteps = document.getElementById('codeInSteps');
-    const codeValue = document.getElementById('codeValue');
+    const codeValue   = document.getElementById('codeValue');
     if (codeValue && codeInSteps) {
-      const observer = new MutationObserver(() => {
-        codeInSteps.textContent = codeValue.textContent;
-      });
+      const observer = new MutationObserver(() => { codeInSteps.textContent = codeValue.textContent; });
       observer.observe(codeValue, { childList: true, characterData: true, subtree: true });
     }
   </script>
