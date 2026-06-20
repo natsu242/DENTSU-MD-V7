@@ -6,6 +6,22 @@ const { handleCommand } = require('../commands');
 
 const NO_PREFIX_CMDS = new Set(['menu','help','aide','start','bot','commandes']);
 
+// Extrait tous les mentionedJid depuis n'importe quel type de message
+function getMentionedJids(rawMsg) {
+  const paths = [
+    rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid,
+    rawMsg?.imageMessage?.contextInfo?.mentionedJid,
+    rawMsg?.videoMessage?.contextInfo?.mentionedJid,
+    rawMsg?.audioMessage?.contextInfo?.mentionedJid,
+    rawMsg?.documentMessage?.contextInfo?.mentionedJid,
+    rawMsg?.stickerMessage?.contextInfo?.mentionedJid,
+  ];
+  for (const jids of paths) {
+    if (Array.isArray(jids) && jids.length > 0) return jids;
+  }
+  return [];
+}
+
 async function messageHandler(sock, { messages, type }) {
   if (type !== 'notify') return;
   const msg = messages[0];
@@ -31,21 +47,25 @@ async function messageHandler(sock, { messages, type }) {
     || msg.message?.documentWithCaptionMessage?.message
     || msg.message;
 
-  // ── BUG FIX: mention check AVANT body check ──────────────────
-  // Si quelqu'un tague le bot sans texte, body est vide → ancienne
-  // version retournait avant d'atteindre le code de mention.
-  const mentionedJids = rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+  // ── Détection mention multi-chemin ───────────────────────────
+  // WhatsApp met mentionedJid dans des chemins différents selon
+  // le type de message (texte, image, vidéo, etc.)
+  const mentionedJids = getMentionedJids(rawMsg);
   const isMentioned = mentionedJids.some(j =>
-    j === botFullJid || j === botNumber + ':0@s.whatsapp.net' || j.startsWith(botNumber + ':')
+    j === botFullJid ||
+    j === botNumber + '@s.whatsapp.net' ||
+    j.startsWith(botNumber + ':')
   );
+
   if (isMentioned) {
-    // ptt: true = vocal qui se joue automatiquement (voice note)
+    console.log(`[MENTION] Bot mentionné par ${senderNumber} dans ${from}`);
     sock.sendMessage(from, {
       audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
       mimetype: 'audio/mpeg',
       ptt: true,
-    }, { quoted: msg }).catch(() => {});
-    // On continue quand même pour traiter une commande si présente
+    }, { quoted: msg }).catch(e => {
+      console.error('[MENTION] Erreur envoi audio:', e.message);
+    });
   }
 
   const mtype = getContentType(rawMsg);
@@ -60,6 +80,19 @@ async function messageHandler(sock, { messages, type }) {
     : mtype === 'interactiveResponseMessage'
         ? (() => { try { return JSON.parse(rawMsg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson || '{}').id || ''; } catch { return ''; } })()
         : '';
+
+  // Fallback: si mention détectée par texte mais pas par JID
+  // (certains clients WhatsApp anciens n'envoient pas mentionedJid)
+  if (!isMentioned && body && body.includes(`@${botNumber}`)) {
+    console.log(`[MENTION-FALLBACK] Bot mentionné via texte par ${senderNumber}`);
+    sock.sendMessage(from, {
+      audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
+      mimetype: 'audio/mpeg',
+      ptt: true,
+    }, { quoted: msg }).catch(e => {
+      console.error('[MENTION-FALLBACK] Erreur envoi audio:', e.message);
+    });
+  }
 
   if (!body) return;
 
