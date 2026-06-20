@@ -66,7 +66,7 @@ async function startSession(number) {
     connectTimeoutMs: 60000,
     defaultQueryTimeoutMs: 0,
     keepAliveIntervalMs: 10000,
-    retryRequestDelayMs: 2000,
+    retryRequestDelayMs: 500,
     generateHighQualityLinkPreview: true,
     markOnlineOnConnect: true,
     syncFullHistory: false,
