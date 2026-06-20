@@ -14,7 +14,7 @@ module.exports = {
   AUTO_VIEW_STATUS: process.env.AUTO_VIEW_STATUS === 'true',
   AUTO_LIKE_STATUS: process.env.AUTO_LIKE_STATUS === 'true',
   AUTO_RECORDING: process.env.AUTO_RECORDING === 'true',
-  AUTO_TYPING: process.env.AUTO_TYPING !== 'false',
+  AUTO_TYPING: process.env.AUTO_TYPING === 'true',
   AUTO_LIKE_EMOJI: ['💋','😶','✨️','💗','🎈','🎉','🥳','❤️','🧫','🐭'],
   MAX_RETRIES: 3,
   MENU_IMAGE: process.env.MENU_IMAGE || 'https://raw.githubusercontent.com/natsu242/DENTSU-MD-V7/main/assets/menu.png',
@@ -23,7 +23,7 @@ module.exports = {
   CHANNEL_LINK2: 'https://whatsapp.com/channel/0029VayOeIbGufIvDPhi6m1X',
   GROUP_LINK: process.env.GROUP_LINK || 'https://chat.whatsapp.com/GtXASqDdchAFvEJ95cQQ0F',
   NEWSLETTER_JID: process.env.NEWSLETTER_JID || '120363423640959729@newsletter',
-  WEBSITE: process.env.WEBSITE || 'https://w.dev/NatsuorDentsu',
+  WEBSITE: process.env.WEBSITE || 'https://dentsu-md-v7.onrender.com',
   TELEGRAM: process.env.TELEGRAM || 'https://t.me/Natsu_or_Dentsu',
   OTP_EXPIRY: 300000,
 };
