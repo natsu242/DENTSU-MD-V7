@@ -9,16 +9,23 @@
 <body>
   <div class="bg-glow"></div>
 
-  <!-- ═══ LANGUE ═══ -->
+  <!-- ═══ SÉLECTION DE LANGUE ═══ -->
   <div id="langOverlay" class="lang-overlay">
     <div class="lang-card">
       <img src="<%= menuImage %>" alt="Bot" class="lang-bot-image" onerror="this.style.display='none'">
       <h1 class="lang-title">🤖 <%= botName %></h1>
       <p class="lang-subtitle">by <%= devName %></p>
-      <p class="lang-choose">Choisissez votre langue / Choose your language</p>
-      <div class="lang-buttons">
-        <button class="lang-btn" onclick="setLang('fr')">🇫🇷 <span>Français</span></button>
-        <button class="lang-btn" onclick="setLang('en')">🇺🇸 <span>English</span></button>
+      <div class="lang-flags-grid">
+        <button class="flag-btn" onclick="setLang('fr')" title="Français">🇫🇷</button>
+        <button class="flag-btn" onclick="setLang('en')" title="English">🇺🇸</button>
+        <button class="flag-btn" onclick="setLang('es')" title="Español">🇪🇸</button>
+        <button class="flag-btn" onclick="setLang('zh')" title="中文">🇨🇳</button>
+        <button class="flag-btn" onclick="setLang('hi')" title="हिन्दी">🇮🇳</button>
+        <button class="flag-btn" onclick="setLang('ar')" title="العربية">🇸🇦</button>
+        <button class="flag-btn" onclick="setLang('pt')" title="Português">🇧🇷</button>
+        <button class="flag-btn" onclick="setLang('ru')" title="Русский">🇷🇺</button>
+        <button class="flag-btn" onclick="setLang('bn')" title="বাংলা">🇧🇩</button>
+        <button class="flag-btn" onclick="setLang('id')" title="Indonesia">🇮🇩</button>
       </div>
     </div>
   </div>
@@ -26,14 +33,21 @@
   <!-- ═══ PAGE PRINCIPALE ═══ -->
   <div class="container" id="mainContent" style="display:none;">
 
-    <!-- Switcher langue -->
-    <div class="lang-switcher">
-      <button onclick="setLang('fr')" id="btnFr" class="lang-switch-btn active-lang">🇫🇷 FR</button>
-      <span class="lang-sep">|</span>
-      <button onclick="setLang('en')" id="btnEn" class="lang-switch-btn">🇺🇸 EN</button>
+    <!-- Switcher langue (mini drapeaux) -->
+    <div class="lang-mini-switcher">
+      <button class="flag-mini active-flag" id="flag-fr" onclick="setLang('fr')">🇫🇷</button>
+      <button class="flag-mini" id="flag-en" onclick="setLang('en')">🇺🇸</button>
+      <button class="flag-mini" id="flag-es" onclick="setLang('es')">🇪🇸</button>
+      <button class="flag-mini" id="flag-zh" onclick="setLang('zh')">🇨🇳</button>
+      <button class="flag-mini" id="flag-hi" onclick="setLang('hi')">🇮🇳</button>
+      <button class="flag-mini" id="flag-ar" onclick="setLang('ar')">🇸🇦</button>
+      <button class="flag-mini" id="flag-pt" onclick="setLang('pt')">🇧🇷</button>
+      <button class="flag-mini" id="flag-ru" onclick="setLang('ru')">🇷🇺</button>
+      <button class="flag-mini" id="flag-bn" onclick="setLang('bn')">🇧🇩</button>
+      <button class="flag-mini" id="flag-id" onclick="setLang('id')">🇮🇩</button>
     </div>
 
-    <!-- Header — sans compteur de sessions -->
+    <!-- Header -->
     <div class="header">
       <img src="<%= menuImage %>" alt="Menu" class="bot-image" onerror="this.style.display='none'">
       <h1 class="bot-name">🤖 <%= botName %></h1>
@@ -42,10 +56,8 @@
 
     <!-- Card connexion -->
     <div class="card">
-      <h2 data-fr="📱 Connecter WhatsApp" data-en="📱 Connect WhatsApp">📱 Connecter WhatsApp</h2>
-      <p class="subtitle"
-         data-fr="Entre ton numéro avec le code pays pour obtenir ton code de jumelage"
-         data-en="Enter your number with country code to get your pairing code">
+      <h2 data-i18n="h2_connect">📱 Connecter WhatsApp</h2>
+      <p class="subtitle" data-i18n="subtitle_connect">
         Entre ton numéro avec le code pays pour obtenir ton code de jumelage
       </p>
 
@@ -55,63 +67,43 @@
           <input
             type="tel"
             id="number"
-            data-placeholder-fr="Ex: 242065121108"
-            data-placeholder-en="Ex: 242065121108"
             placeholder="Ex: 242065121108"
             maxlength="15"
             autocomplete="off"
             inputmode="numeric"
           >
         </div>
-        <p class="hint"
-           data-fr="⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)"
-           data-en="⚠️ Include country code without + (e.g. <strong>242</strong>XXXXXXXX)">
+        <p class="hint" data-i18n="hint">
           ⚠️ Inclure le code pays sans le + (ex: <strong>242</strong>XXXXXXXX)
         </p>
-        <button id="pairBtn" type="submit"
-                data-fr="📲 Obtenir mon code"
-                data-en="📲 Get my code">📲 Obtenir mon code</button>
+        <button id="pairBtn" type="submit" data-i18n="btn_pair">📲 Obtenir mon code</button>
       </form>
 
       <div id="result" style="display:none;" class="result"></div>
 
       <div id="codeDisplay" style="display:none;" class="code-box">
-        <p class="code-label"
-           data-fr="🔑 Ton code de jumelage :"
-           data-en="🔑 Your pairing code:">🔑 Ton code de jumelage :</p>
+        <p class="code-label" data-i18n="code_label">🔑 Ton code de jumelage :</p>
         <div class="code-value" id="codeValue"></div>
-        <button id="copyBtn" class="copy-btn"
-                data-fr="📋 Copier le code"
-                data-en="📋 Copy code">📋 Copier le code</button>
+        <button id="copyBtn" class="copy-btn" data-i18n="btn_copy">📋 Copier le code</button>
       </div>
 
       <div id="steps" style="display:none;" class="steps-box">
-        <h3 data-fr="📋 Comment entrer le code dans WhatsApp :"
-            data-en="📋 How to enter the code in WhatsApp:">
-          📋 Comment entrer le code dans WhatsApp :
-        </h3>
+        <h3 data-i18n="steps_title">📋 Comment entrer le code dans WhatsApp :</h3>
         <ol id="stepsList"></ol>
-        <div class="warning-box"
-             data-fr="⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !"
-             data-en="⏱️ The code expires in <strong>60 seconds</strong> — enter it quickly!">
+        <div class="warning-box" data-i18n="warning">
           ⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !
         </div>
       </div>
     </div>
 
-
     <!-- Liens sociaux -->
     <div class="social-links">
-      <% if (channelLink) { %><a href="<%= channelLink %>" target="_blank" class="social-btn" data-fr="📢 Canal" data-en="📢 Channel">📢 Canal</a><% } %>
-      <% if (groupLink) { %><a href="<%= groupLink %>" target="_blank" class="social-btn" data-fr="👥 Groupe" data-en="👥 Group">👥 Groupe</a><% } %>
+      <% if (channelLink) { %><a href="<%= channelLink %>" target="_blank" class="social-btn" data-i18n="social_channel">📢 Canal</a><% } %>
+      <% if (groupLink) { %><a href="<%= groupLink %>" target="_blank" class="social-btn" data-i18n="social_group">👥 Groupe</a><% } %>
       <% if (telegram) { %><a href="<%= telegram %>" target="_blank" class="social-btn">✈️ Telegram</a><% } %>
     </div>
 
-    <p class="footer"
-       data-fr="© 2025 <%= devName %> • Tous droits réservés"
-       data-en="© 2025 <%= devName %> • All rights reserved">
-      © 2025 <%= devName %> • Tous droits réservés
-    </p>
+    <p class="footer" data-i18n="footer">© 2025 <%= devName %> • Tous droits réservés</p>
   </div>
 
   <script src="/app.js"></script>
