@@ -82,7 +82,7 @@ async function messageHandler(sock, { messages, type }) {
   const text = args.join(' ');
 
   if (config.AUTO_TYPING) {
-    try { await sock.sendPresenceUpdate('composing', from); } catch (_) {}
+    try { sock.sendPresenceUpdate('composing', from); } catch (_) {}
   }
 
   const reply = async (content) => {
@@ -112,7 +112,7 @@ async function messageHandler(sock, { messages, type }) {
     try { await reply(`⚠️ Error in *${command}*: ${err.message}`); } catch (_) {}
   } finally {
     if (config.AUTO_TYPING) {
-      try { await sock.sendPresenceUpdate('paused', from); } catch (_) {}
+      try { sock.sendPresenceUpdate('paused', from); } catch (_) {}
     }
   }
 }
@@ -329,7 +329,7 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}rwaifu
 
 ────────────────────────────
-🌐 *Website* → https://dentsu-md-v7.onrender.com
+🌐 *Website* → dentsu-md-v7.onrender.com
 📋 *Prefix* → ${P}
 > _NatsuTech's Dev_ 🇨🇬`;
 
