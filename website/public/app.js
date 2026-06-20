@@ -1,6 +1,4 @@
-// ═══════════════════════════════════════════════════════
-//  TRADUCTIONS — 10 LANGUES
-// ═══════════════════════════════════════════════════════
+// ═══ TRADUCTIONS — 10 LANGUES ═══
 const TRANSLATIONS = {
   fr: {
     h2_connect: '📱 Connecter WhatsApp',
@@ -15,7 +13,7 @@ const TRANSLATIONS = {
     warning: '⏱️ Le code expire dans <strong>60 secondes</strong> — entre-le rapidement !',
     social_channel: '📢 Canal',
     social_group: '👥 Groupe',
-    footer: '© 2025 NatsuTech • Tous droits réservés',
+    footer: document.querySelector('.footer') ? document.querySelector('.footer').textContent : '© 2025 NatsuTech • Tous droits réservés',
     error_invalid: 'Entre un numéro valide avec le code pays. Ex: 242065121108',
     error_network: 'Erreur réseau. Vérifie ta connexion et réessaie.',
     success_code: 'Code généré ! Suis les étapes ci-dessous 👇',
@@ -27,7 +25,7 @@ const TRANSLATIONS = {
       'Va dans <strong>Appareils liés</strong>',
       'Appuie sur <strong>Lier un appareil</strong>',
       'Choisis <strong>"Lier avec un numéro de téléphone"</strong> (pas le QR)',
-      'Entre le code <strong><span id="codeInSteps"></span></strong> affiché ci-dessus',
+      'Entre le code <strong id="codeInSteps"></strong> affiché ci-dessus',
       '✅ Le bot se connecte automatiquement !'
     ]
   },
@@ -44,7 +42,7 @@ const TRANSLATIONS = {
     warning: '⏱️ The code expires in <strong>60 seconds</strong> — enter it quickly!',
     social_channel: '📢 Channel',
     social_group: '👥 Group',
-    footer: '© 2025 NatsuTech • All rights reserved',
+    footer: null,
     error_invalid: 'Enter a valid number with country code. Ex: 242065121108',
     error_network: 'Network error. Check your connection and try again.',
     success_code: 'Code generated! Follow the steps below 👇',
@@ -56,7 +54,7 @@ const TRANSLATIONS = {
       'Go to <strong>Linked Devices</strong>',
       'Tap <strong>Link a Device</strong>',
       'Choose <strong>"Link with phone number"</strong> (not QR)',
-      'Enter the code <strong><span id="codeInSteps"></span></strong> shown above',
+      'Enter the code <strong id="codeInSteps"></strong> shown above',
       '✅ The bot connects automatically!'
     ]
   },
@@ -73,7 +71,7 @@ const TRANSLATIONS = {
     warning: '⏱️ El código expira en <strong>60 segundos</strong> — ¡ingrésalo rápido!',
     social_channel: '📢 Canal',
     social_group: '👥 Grupo',
-    footer: '© 2025 NatsuTech • Todos los derechos reservados',
+    footer: null,
     error_invalid: 'Introduce un número válido con código de país. Ej: 242065121108',
     error_network: 'Error de red. Verifica tu conexión e intenta de nuevo.',
     success_code: '¡Código generado! Sigue los pasos a continuación 👇',
@@ -85,7 +83,7 @@ const TRANSLATIONS = {
       'Ve a <strong>Dispositivos vinculados</strong>',
       'Toca <strong>Vincular un dispositivo</strong>',
       'Elige <strong>"Vincular con número de teléfono"</strong> (no QR)',
-      'Ingresa el código <strong><span id="codeInSteps"></span></strong> mostrado arriba',
+      'Ingresa el código <strong id="codeInSteps"></strong> mostrado arriba',
       '✅ ¡El bot se conecta automáticamente!'
     ]
   },
@@ -102,10 +100,10 @@ const TRANSLATIONS = {
     warning: '⏱️ 验证码将在 <strong>60秒</strong> 后过期 — 请尽快输入！',
     social_channel: '📢 频道',
     social_group: '👥 群组',
-    footer: '© 2025 NatsuTech • 版权所有',
+    footer: null,
     error_invalid: '请输入包含国家代码的有效号码。例：242065121108',
-    error_network: '网络错误。请检查您的连接后重试。',
-    success_code: '验证码已生成！请按照以下步骤操作 👇',
+    error_network: '网络错误。请检查连接后重试。',
+    success_code: '验证码已生成！请按以下步骤操作 👇',
     success_already: '✅ 已连接！',
     error_unknown: '未知错误',
     steps: [
@@ -114,7 +112,7 @@ const TRANSLATIONS = {
       '进入 <strong>已关联的设备</strong>',
       '点击 <strong>关联设备</strong>',
       '选择 <strong>"通过电话号码关联"</strong>（不是二维码）',
-      '输入上方显示的验证码 <strong><span id="codeInSteps"></span></strong>',
+      '输入上方验证码 <strong id="codeInSteps"></strong>',
       '✅ 机器人自动连接成功！'
     ]
   },
@@ -128,13 +126,13 @@ const TRANSLATIONS = {
     btn_copied: '✅ कॉपी हो गया!',
     code_label: '🔑 आपका पेयरिंग कोड:',
     steps_title: '📋 WhatsApp में कोड कैसे दर्ज करें:',
-    warning: '⏱️ कोड <strong>60 सेकंड</strong> में समाप्त हो जाएगा — जल्दी दर्ज करें!',
+    warning: '⏱️ कोड <strong>60 सेकंड</strong> में समाप्त होगा — जल्दी दर्ज करें!',
     social_channel: '📢 चैनल',
     social_group: '👥 ग्रुप',
-    footer: '© 2025 NatsuTech • सर्वाधिकार सुरक्षित',
+    footer: null,
     error_invalid: 'देश कोड सहित एक वैध नंबर दर्ज करें। जैसे: 242065121108',
     error_network: 'नेटवर्क त्रुटि। अपना कनेक्शन जांचें और पुनः प्रयास करें।',
-    success_code: 'कोड जनरेट हुआ! नीचे दिए गए चरणों का पालन करें 👇',
+    success_code: 'कोड जनरेट हुआ! नीचे दिए चरणों का पालन करें 👇',
     success_already: '✅ पहले से कनेक्ट है!',
     error_unknown: 'अज्ञात त्रुटि',
     steps: [
@@ -143,7 +141,7 @@ const TRANSLATIONS = {
       '<strong>लिंक्ड डिवाइस</strong> में जाएं',
       '<strong>डिवाइस लिंक करें</strong> पर टैप करें',
       '<strong>"फोन नंबर से लिंक करें"</strong> चुनें (QR नहीं)',
-      'ऊपर दिखाया गया कोड <strong><span id="codeInSteps"></span></strong> दर्ज करें',
+      'ऊपर दिखाया गया कोड <strong id="codeInSteps"></strong> दर्ज करें',
       '✅ बॉट स्वचालित रूप से कनेक्ट होता है!'
     ]
   },
@@ -160,7 +158,7 @@ const TRANSLATIONS = {
     warning: '⏱️ ينتهي صلاحية الرمز خلال <strong>60 ثانية</strong> — أدخله بسرعة!',
     social_channel: '📢 القناة',
     social_group: '👥 المجموعة',
-    footer: '© 2025 NatsuTech • جميع الحقوق محفوظة',
+    footer: null,
     error_invalid: 'أدخل رقمًا صالحًا مع رمز الدولة. مثال: 242065121108',
     error_network: 'خطأ في الشبكة. تحقق من اتصالك وحاول مرة أخرى.',
     success_code: 'تم توليد الرمز! اتبع الخطوات أدناه 👇',
@@ -168,11 +166,11 @@ const TRANSLATIONS = {
     error_unknown: 'خطأ غير معروف',
     steps: [
       'افتح <strong>واتساب</strong> على هاتفك',
-      'اضغط على <strong>النقاط الثلاث</strong> (القائمة) في أعلى اليمين',
+      'اضغط على <strong>النقاط الثلاث</strong> في أعلى اليمين',
       'اذهب إلى <strong>الأجهزة المرتبطة</strong>',
       'اضغط على <strong>ربط جهاز</strong>',
-      'اختر <strong>"الربط برقم الهاتف"</strong> (ليس رمز QR)',
-      'أدخل الرمز <strong><span id="codeInSteps"></span></strong> المعروض أعلاه',
+      'اختر <strong>"الربط برقم الهاتف"</strong> (ليس QR)',
+      'أدخل الرمز <strong id="codeInSteps"></strong> المعروض أعلاه',
       '✅ يتصل البوت تلقائياً!'
     ]
   },
@@ -189,7 +187,7 @@ const TRANSLATIONS = {
     warning: '⏱️ O código expira em <strong>60 segundos</strong> — insira-o rapidamente!',
     social_channel: '📢 Canal',
     social_group: '👥 Grupo',
-    footer: '© 2025 NatsuTech • Todos os direitos reservados',
+    footer: null,
     error_invalid: 'Digite um número válido com código do país. Ex: 242065121108',
     error_network: 'Erro de rede. Verifique sua conexão e tente novamente.',
     success_code: 'Código gerado! Siga os passos abaixo 👇',
@@ -201,7 +199,7 @@ const TRANSLATIONS = {
       'Vá em <strong>Dispositivos vinculados</strong>',
       'Toque em <strong>Vincular dispositivo</strong>',
       'Escolha <strong>"Vincular com número de telefone"</strong> (não QR)',
-      'Digite o código <strong><span id="codeInSteps"></span></strong> mostrado acima',
+      'Digite o código <strong id="codeInSteps"></strong> mostrado acima',
       '✅ O bot conecta automaticamente!'
     ]
   },
@@ -218,19 +216,19 @@ const TRANSLATIONS = {
     warning: '⏱️ Код истекает через <strong>60 секунд</strong> — введите его быстро!',
     social_channel: '📢 Канал',
     social_group: '👥 Группа',
-    footer: '© 2025 NatsuTech • Все права защищены',
+    footer: null,
     error_invalid: 'Введите действительный номер с кодом страны. Пример: 242065121108',
     error_network: 'Ошибка сети. Проверьте подключение и повторите попытку.',
     success_code: 'Код сгенерирован! Следуйте инструкциям ниже 👇',
     success_already: '✅ Уже подключён!',
     error_unknown: 'Неизвестная ошибка',
     steps: [
-      'Откройте <strong>WhatsApp</strong> на своём телефоне',
+      'Откройте <strong>WhatsApp</strong> на телефоне',
       'Нажмите на <strong>3 точки</strong> (меню) в правом верхнем углу',
       'Перейдите в <strong>Связанные устройства</strong>',
       'Нажмите <strong>Привязать устройство</strong>',
       'Выберите <strong>"Привязать по номеру телефона"</strong> (не QR)',
-      'Введите код <strong><span id="codeInSteps"></span></strong>, показанный выше',
+      'Введите код <strong id="codeInSteps"></strong> из поля выше',
       '✅ Бот подключается автоматически!'
     ]
   },
@@ -247,7 +245,7 @@ const TRANSLATIONS = {
     warning: '⏱️ কোডটি <strong>৬০ সেকেন্ডে</strong> মেয়াদ শেষ হবে — দ্রুত দিন!',
     social_channel: '📢 চ্যানেল',
     social_group: '👥 গ্রুপ',
-    footer: '© 2025 NatsuTech • সর্বস্বত্ব সংরক্ষিত',
+    footer: null,
     error_invalid: 'দেশের কোড সহ একটি বৈধ নম্বর দিন। যেমন: 242065121108',
     error_network: 'নেটওয়ার্ক ত্রুটি। সংযোগ পরীক্ষা করুন এবং আবার চেষ্টা করুন।',
     success_code: 'কোড তৈরি হয়েছে! নিচের ধাপগুলো অনুসরণ করুন 👇',
@@ -259,7 +257,7 @@ const TRANSLATIONS = {
       '<strong>লিংকড ডিভাইস</strong>-এ যান',
       '<strong>একটি ডিভাইস লিংক করুন</strong> ট্যাপ করুন',
       '<strong>"ফোন নম্বর দিয়ে লিংক করুন"</strong> বেছে নিন (QR নয়)',
-      'উপরে দেখানো কোড <strong><span id="codeInSteps"></span></strong> দিন',
+      'উপরে দেখানো কোড <strong id="codeInSteps"></strong> দিন',
       '✅ বট স্বয়ংক্রিয়ভাবে সংযুক্ত হয়!'
     ]
   },
@@ -276,9 +274,9 @@ const TRANSLATIONS = {
     warning: '⏱️ Kode kedaluwarsa dalam <strong>60 detik</strong> — masukkan dengan cepat!',
     social_channel: '📢 Saluran',
     social_group: '👥 Grup',
-    footer: '© 2025 NatsuTech • Semua hak dilindungi',
+    footer: null,
     error_invalid: 'Masukkan nomor yang valid dengan kode negara. Mis: 242065121108',
-    error_network: 'Kesalahan jaringan. Periksa koneksi Anda dan coba lagi.',
+    error_network: 'Kesalahan jaringan. Periksa koneksi dan coba lagi.',
     success_code: 'Kode dibuat! Ikuti langkah-langkah di bawah 👇',
     success_already: '✅ Sudah terhubung!',
     error_unknown: 'Kesalahan tidak diketahui',
@@ -288,64 +286,60 @@ const TRANSLATIONS = {
       'Buka <strong>Perangkat Tertaut</strong>',
       'Ketuk <strong>Tautkan Perangkat</strong>',
       'Pilih <strong>"Tautkan dengan nomor telepon"</strong> (bukan QR)',
-      'Masukkan kode <strong><span id="codeInSteps"></span></strong> yang tertera di atas',
+      'Masukkan kode <strong id="codeInSteps"></strong> yang tertera di atas',
       '✅ Bot terhubung secara otomatis!'
     ]
   }
 };
 
-// RTL languages
 const RTL_LANGS = new Set(['ar']);
 
-// ═══════════════════════════════════════════════════════
-//  GESTION DE LA LANGUE
-// ═══════════════════════════════════════════════════════
-let currentLang = localStorage.getItem('dentsu_lang') || null;
+// ═══ LANGUE ═══
+let currentLang = null;
+// Ne pas charger depuis localStorage — toujours afficher l'overlay au départ
+// pour que l'utilisateur voit les drapeaux image (pas d'emoji)
 
 function t(key) {
-  return (TRANSLATIONS[currentLang] || TRANSLATIONS['fr'])[key] || key;
+  const tr = TRANSLATIONS[currentLang] || TRANSLATIONS['fr'];
+  return tr[key] !== null && tr[key] !== undefined ? tr[key] : (TRANSLATIONS['fr'][key] || key);
 }
 
 function setLang(lang) {
+  if (!TRANSLATIONS[lang]) lang = 'fr';
   currentLang = lang;
   localStorage.setItem('dentsu_lang', lang);
 
-  // Masquer l'overlay
+  // Masquer overlay, afficher page
   const overlay = document.getElementById('langOverlay');
   const main = document.getElementById('mainContent');
   if (overlay) overlay.style.display = 'none';
-  if (main) main.style.display = 'block';
+  if (main) { main.style.display = 'block'; main.style.opacity = '0'; setTimeout(() => { main.style.transition = 'opacity 0.3s'; main.style.opacity = '1'; }, 10); }
 
-  // RTL support
+  // RTL
   const html = document.getElementById('htmlRoot');
-  if (html) {
-    html.lang = lang;
-    html.dir = RTL_LANGS.has(lang) ? 'rtl' : 'ltr';
-  }
+  if (html) { html.lang = lang; html.dir = RTL_LANGS.has(lang) ? 'rtl' : 'ltr'; }
 
-  // Mettre à jour tous les éléments [data-i18n]
+  // Mettre à jour tous les [data-i18n]
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
+    if (key === 'footer') return; // Le footer garde la valeur EJS
     const val = t(key);
-    if (val !== undefined) el.innerHTML = val;
+    if (val) el.innerHTML = val;
   });
 
-  // Mettre à jour les boutons actifs (mini drapeaux)
-  document.querySelectorAll('.flag-mini').forEach(btn => {
-    btn.classList.remove('active-flag');
-  });
+  // Drapeaux actifs
+  document.querySelectorAll('.flag-mini').forEach(b => b.classList.remove('active-flag'));
   const activeBtn = document.getElementById('flag-' + lang);
   if (activeBtn) activeBtn.classList.add('active-flag');
 
-  // Mettre à jour le bouton pair si pas désactivé
+  // Bouton principal
   const btn = document.getElementById('pairBtn');
   if (btn && !btn.disabled) btn.innerHTML = t('btn_pair');
 
-  // Mettre à jour le bouton copier
+  // Bouton copier
   const copyBtn = document.getElementById('copyBtn');
   if (copyBtn) copyBtn.innerHTML = t('btn_copy');
 
-  // Mettre à jour les étapes
   renderSteps();
 }
 
@@ -356,26 +350,22 @@ function renderSteps() {
   if (Array.isArray(steps)) {
     list.innerHTML = steps.map(s => `<li>${s}</li>`).join('');
   }
-  // Re-sync codeInSteps
-  const codeInSteps = document.getElementById('codeInSteps');
-  const codeValue = document.getElementById('codeValue');
-  if (codeInSteps && codeValue) {
-    codeInSteps.textContent = codeValue.textContent;
-  }
+  syncCodeInSteps();
 }
 
-// ═══════════════════════════════════════════════════════
-//  INITIALISATION
-// ═══════════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
-  if (currentLang && TRANSLATIONS[currentLang]) {
-    setLang(currentLang);
-  } else {
-    document.getElementById('langOverlay').style.display = 'flex';
-    document.getElementById('mainContent').style.display = 'none';
-  }
+function syncCodeInSteps() {
+  const codeValue = document.getElementById('codeValue');
+  const codeInSteps = document.getElementById('codeInSteps');
+  if (codeInSteps && codeValue) codeInSteps.textContent = codeValue.textContent;
+}
 
-  // ── Formulaire de couplage ──────────────────────────────────────
+// ═══ INITIALISATION ═══
+window.addEventListener('DOMContentLoaded', () => {
+  // Toujours montrer l'overlay pour que l'utilisateur choisisse sa langue
+  document.getElementById('langOverlay').style.display = 'flex';
+  document.getElementById('mainContent').style.display = 'none';
+
+  // ── Formulaire ──────────────────────────────────────────────────
   const form = document.getElementById('pairForm');
   const numberInput = document.getElementById('number');
   const btn = document.getElementById('pairBtn');
@@ -388,10 +378,8 @@ window.addEventListener('DOMContentLoaded', () => {
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const number = numberInput.value.trim().replace(/[^0-9]/g, '');
-    if (!number || number.length < 7) {
-      showError(t('error_invalid'));
-      return;
-    }
+    if (!number || number.length < 7) { showError(t('error_invalid')); return; }
+
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner"></span> ${t('btn_pair_loading')}`;
     resultDiv.style.display = 'none';
@@ -402,7 +390,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number }),
+        body: JSON.stringify({ number })
       });
       const data = await res.json();
       if (data.success && data.code) {
@@ -432,24 +420,21 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   if (codeValue) {
-    const observer = new MutationObserver(() => {
-      const codeInSteps = document.getElementById('codeInSteps');
-      if (codeInSteps) codeInSteps.textContent = codeValue.textContent;
-    });
+    const observer = new MutationObserver(syncCodeInSteps);
     observer.observe(codeValue, { childList: true, characterData: true, subtree: true });
   }
 });
 
 function showError(msg) {
-  const resultDiv = document.getElementById('result');
-  resultDiv.className = 'result error';
-  resultDiv.textContent = '❌ ' + msg;
-  resultDiv.style.display = 'block';
+  const d = document.getElementById('result');
+  d.className = 'result error';
+  d.textContent = '❌ ' + msg;
+  d.style.display = 'block';
 }
 
 function showSuccess(msg) {
-  const resultDiv = document.getElementById('result');
-  resultDiv.className = 'result success';
-  resultDiv.textContent = '✅ ' + msg;
-  resultDiv.style.display = 'block';
+  const d = document.getElementById('result');
+  d.className = 'result success';
+  d.textContent = '✅ ' + msg;
+  d.style.display = 'block';
 }
