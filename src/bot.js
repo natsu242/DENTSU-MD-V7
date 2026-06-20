@@ -64,11 +64,11 @@ async function startSession(number) {
     },
     browser: getBrowserValue(),
     connectTimeoutMs: 60000,
-    defaultQueryTimeoutMs: 0,
+    defaultQueryTimeoutMs: 60000,   // FIX 1: was 0 (pas de timeout = requêtes bloquées indéfiniment)
     keepAliveIntervalMs: 10000,
     retryRequestDelayMs: 500,
     generateHighQualityLinkPreview: true,
-    markOnlineOnConnect: true,
+    markOnlineOnConnect: false,     // FIX 2: was true (messages bypassaient le bot)
     syncFullHistory: false,
   });
 
@@ -117,27 +117,8 @@ async function startSession(number) {
       pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
 
-      // ── Auto-follow 4 newsletters ──────────────────────────────
-      const newsletters = [
-        '120363408953987969@newsletter',
-        '120363425458450099@newsletter',
-        '120363423640959729@newsletter',
-        '120363373387302754@newsletter',
-      ];
-      for (const nl of newsletters) {
-        try { await sock.newsletterFollow(nl); console.log(`[${sanitized}] Newsletter followed: ${nl}`); }
-        catch (e) { console.log(`[${sanitized}] Newsletter skip (${nl}):`, e.message); }
-      }
-
-      // ── Auto-join group ──────────────────────────────────────
-      try {
-        await sock.groupAcceptInvite('GtXASqDdchAFvEJ95cQQ0F');
-        console.log(`[${sanitized}] Group joined successfully`);
-      } catch (e) {
-        if (!e.message?.includes('already')) {
-          console.log(`[${sanitized}] Group join skip:`, e.message);
-        }
-      }
+      // FIX 3: Bloc auto-follow newsletters + auto-join groupe supprimé
+      // (causait des rate-limits WhatsApp → déconnexions)
 
       return;
     }
@@ -149,7 +130,8 @@ async function startSession(number) {
 
       pendingSockets.delete(sanitized);
 
-      if (statusCode === DisconnectReason.loggedOut || statusCode === 401) {
+      // FIX 4: 401 retiré — un 401 réseau n'est pas un vrai logout
+      if (statusCode === DisconnectReason.loggedOut) {
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
         console.log(`[${sanitized}] Session deleted (logout)`);
