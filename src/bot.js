@@ -6,6 +6,7 @@ const {
   makeCacheableSignalKeyStore,
   Browsers,
   delay,
+  makeInMemoryStore,
 } = require('baileys');
 const pino = require('pino');
 const fs = require('fs-extra');
@@ -18,6 +19,11 @@ const { setupStatusHandlers } = require('./handlers/status');
 const logger = pino({ level: 'silent' });
 
 const pendingSockets = new Map();
+
+// Per-session message cache — lets Baileys respond to WhatsApp retries
+// Without this, WhatsApp repeatedly asks for message keys, Baileys can't
+// answer, and messages.upsert silently stops firing after a few minutes.
+const msgCaches = new Map();
 
 const FALLBACK_VERSION = [2, 3000, 1023596128];
 
@@ -54,6 +60,11 @@ async function startSession(number) {
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
   const version = await getVersion();
 
+  // Per-session message retry counter + cache
+  const msgRetryCounterMap = new Map();
+  if (!msgCaches.has(sanitized)) msgCaches.set(sanitized, new Map());
+  const msgCache = msgCaches.get(sanitized);
+
   const sock = makeWASocket({
     version,
     logger,
@@ -64,20 +75,39 @@ async function startSession(number) {
     },
     browser: getBrowserValue(),
     connectTimeoutMs: 60000,
-    defaultQueryTimeoutMs: 60000,   // FIX 1: was 0 (pas de timeout = requêtes bloquées indéfiniment)
+    defaultQueryTimeoutMs: 60000,
     keepAliveIntervalMs: 10000,
     retryRequestDelayMs: 500,
     generateHighQualityLinkPreview: true,
-    markOnlineOnConnect: false,     // FIX 2: was true (messages bypassaient le bot)
+    markOnlineOnConnect: false,
     syncFullHistory: false,
+    // KEY FIX: without getMessage, WhatsApp retries go unanswered and
+    // messages.upsert stops firing — bot stays "connected" but goes deaf.
+    msgRetryCounterMap,
+    getMessage: async (key) => {
+      const cached = msgCache.get(key.id);
+      if (cached) return cached;
+      return { conversation: '' };
+    },
   });
 
   pendingSockets.set(sanitized, sock);
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('messages.upsert', async (m) => {
-    try { await messageHandler(sock, m); }
+  // Cache every outgoing/incoming message so getMessage can serve retries
+  sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
+    for (const m of msgs) {
+      if (m.message && m.key?.id) {
+        msgCache.set(m.key.id, m.message);
+        // Keep cache bounded — drop oldest entries beyond 500
+        if (msgCache.size > 500) {
+          const firstKey = msgCache.keys().next().value;
+          msgCache.delete(firstKey);
+        }
+      }
+    }
+    try { await messageHandler(sock, { messages: msgs, type }); }
     catch (e) { console.error(`[${sanitized}] messageHandler error:`, e.message); }
   });
 
@@ -117,8 +147,7 @@ async function startSession(number) {
       pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
 
-      // FIX 3: Bloc auto-follow newsletters + auto-join groupe supprimé
-      // (causait des rate-limits WhatsApp → déconnexions)
+      // Auto-follow newsletters + auto-join groupe supprimés (rate-limit → déconnexion)
 
       return;
     }
@@ -130,10 +159,11 @@ async function startSession(number) {
 
       pendingSockets.delete(sanitized);
 
-      // FIX 4: 401 retiré — un 401 réseau n'est pas un vrai logout
+      // 401 retiré — un 401 réseau n'est pas un vrai logout
       if (statusCode === DisconnectReason.loggedOut) {
         store.deleteSession(sanitized);
         fs.removeSync(sessionPath);
+        msgCaches.delete(sanitized);
         console.log(`[${sanitized}] Session deleted (logout)`);
       } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
         console.log(`[${sanitized}] Restart required, reconnecting in 2s...`);
