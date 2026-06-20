@@ -76,86 +76,66 @@ body {
   margin-bottom: 28px;
 }
 
-.lang-choose {
-  color: var(--text);
-  font-size: 0.95rem;
-  margin-bottom: 20px;
-  opacity: 0.85;
+/* Grille de drapeaux — overlay */
+.lang-flags-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 8px;
 }
 
-.lang-buttons {
-  display: flex;
-  gap: 14px;
-  justify-content: center;
-}
-
-.lang-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 18px 28px;
-  background: rgba(0,230,118,0.08);
-  border: 1px solid rgba(0,230,118,0.25);
-  border-radius: 14px;
-  color: var(--text);
+.flag-btn {
+  background: rgba(0,230,118,0.06);
+  border: 1px solid rgba(0,230,118,0.2);
+  border-radius: 12px;
   font-size: 2rem;
+  padding: 12px 6px;
   cursor: pointer;
-  transition: all 0.2s;
-  min-width: 110px;
+  transition: all 0.18s;
+  line-height: 1;
+  text-align: center;
 }
 
-.lang-btn span {
-  font-size: 0.88rem;
-  color: var(--green);
-  font-weight: 600;
-}
-
-.lang-btn:hover {
+.flag-btn:hover {
   background: rgba(0,230,118,0.18);
   border-color: var(--green);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(0,230,118,0.2);
+  transform: translateY(-2px) scale(1.08);
+  box-shadow: 0 4px 16px rgba(0,230,118,0.2);
 }
 
-/* ═══ SWITCHER DE LANGUE (dans la page) ═══ */
-.lang-switcher {
+/* ═══ MINI DRAPEAUX SWITCHER (dans la page) ═══ */
+.lang-mini-switcher {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 6px;
-  margin-bottom: 12px;
+  gap: 5px;
+  margin-bottom: 14px;
 }
 
-.lang-switch-btn {
+.flag-mini {
   background: transparent;
-  border: 1px solid rgba(0,230,118,0.2);
-  color: var(--muted);
-  padding: 4px 10px;
-  border-radius: 20px;
+  border: 1px solid rgba(0,230,118,0.15);
+  border-radius: 8px;
+  font-size: 1.25rem;
+  padding: 3px 6px;
   cursor: pointer;
-  font-size: 0.8rem;
-  transition: all 0.2s;
-  width: auto;
+  transition: all 0.18s;
+  line-height: 1;
+  opacity: 0.55;
 }
 
-.lang-switch-btn:hover {
+.flag-mini:hover {
+  opacity: 1;
   border-color: var(--green);
-  color: var(--green);
-  transform: none;
-  box-shadow: none;
+  background: rgba(0,230,118,0.1);
+  transform: scale(1.1);
 }
 
-.lang-switch-btn.active-lang {
+.flag-mini.active-flag {
+  opacity: 1;
+  border-color: var(--green);
   background: rgba(0,230,118,0.12);
-  border-color: var(--green);
-  color: var(--green);
-  font-weight: 600;
-}
-
-.lang-sep {
-  color: var(--border);
-  font-size: 0.75rem;
+  box-shadow: 0 0 8px rgba(0,230,118,0.2);
 }
 
 /* ═══ CONTAINER ═══ */
