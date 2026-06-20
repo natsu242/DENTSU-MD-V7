@@ -6,7 +6,6 @@ const { handleCommand } = require('../commands');
 
 const NO_PREFIX_CMDS = new Set(['menu','help','aide','start','bot','commandes']);
 
-// Extrait tous les mentionedJid depuis n'importe quel type de message
 function getMentionedJids(rawMsg) {
   const paths = [
     rawMsg?.extendedTextMessage?.contextInfo?.mentionedJid,
@@ -47,9 +46,7 @@ async function messageHandler(sock, { messages, type }) {
     || msg.message?.documentWithCaptionMessage?.message
     || msg.message;
 
-  // ── Détection mention multi-chemin ───────────────────────────
-  // WhatsApp met mentionedJid dans des chemins différents selon
-  // le type de message (texte, image, vidéo, etc.)
+  // ── Mention detection ────────────────────────────────────────
   const mentionedJids = getMentionedJids(rawMsg);
   const isMentioned = mentionedJids.some(j =>
     j === botFullJid ||
@@ -58,13 +55,12 @@ async function messageHandler(sock, { messages, type }) {
   );
 
   if (isMentioned) {
-    console.log(`[MENTION] Bot mentionné par ${senderNumber} dans ${from}`);
     sock.sendMessage(from, {
       audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
       mimetype: 'audio/mpeg',
       ptt: true,
     }, { quoted: msg }).catch(e => {
-      console.error('[MENTION] Erreur envoi audio:', e.message);
+      console.error('[MENTION] Erreur audio:', e.message);
     });
   }
 
@@ -81,17 +77,13 @@ async function messageHandler(sock, { messages, type }) {
         ? (() => { try { return JSON.parse(rawMsg.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson || '{}').id || ''; } catch { return ''; } })()
         : '';
 
-  // Fallback: si mention détectée par texte mais pas par JID
-  // (certains clients WhatsApp anciens n'envoient pas mentionedJid)
+  // Fallback mention via texte (vieux clients WhatsApp)
   if (!isMentioned && body && body.includes(`@${botNumber}`)) {
-    console.log(`[MENTION-FALLBACK] Bot mentionné via texte par ${senderNumber}`);
     sock.sendMessage(from, {
       audio: { url: 'https://files.catbox.moe/nacq93.mp3' },
       mimetype: 'audio/mpeg',
       ptt: true,
-    }, { quoted: msg }).catch(e => {
-      console.error('[MENTION-FALLBACK] Erreur envoi audio:', e.message);
-    });
+    }, { quoted: msg }).catch(() => {});
   }
 
   if (!body) return;
@@ -115,6 +107,11 @@ async function messageHandler(sock, { messages, type }) {
 
   const text = args.join(' ');
 
+  // ── AUTO TYPING: affiche "en train d'écrire..." pendant le traitement ──
+  try {
+    await sock.sendPresenceUpdate('composing', from);
+  } catch (_) {}
+
   const reply = async (content) => {
     if (typeof content === 'string') return sock.sendMessage(from, { text: content }, { quoted: msg });
     return sock.sendMessage(from, content, { quoted: msg });
@@ -131,22 +128,26 @@ async function messageHandler(sock, { messages, type }) {
 
   try {
     if (NO_PREFIX_CMDS.has(command)) {
-      return await sendMainMenu(ctx);
-    }
-    const handled = await handleCommand(ctx);
-    if (handled === false) {
-      await reply(`❌ Unknown command *${command}*.\nType *.menu* to see all commands.`);
+      await sendMainMenu(ctx);
+    } else {
+      const handled = await handleCommand(ctx);
+      if (handled === false) {
+        await reply(`❌ Unknown command *${command}*.\nType *.menu* to see all commands.`);
+      }
     }
   } catch (err) {
     console.error(`[CMD:${command}]`, err.message);
     try { await reply(`⚠️ Error in *${command}*: ${err.message}`); } catch (_) {}
+  } finally {
+    // Arrête le "en train d'écrire..." après la réponse
+    sock.sendPresenceUpdate('paused', from).catch(() => {});
   }
 }
 
 async function sendMainMenu(ctx) {
   const { sock, from, msg, sender, senderNumber } = ctx;
 
-  // 🚀 Réaction uniquement pour le menu
+  // 🚀 Réaction uniquement sur le menu
   sock.sendMessage(from, { react: { text: '🚀', key: msg.key } }).catch(() => {});
 
   const P = config.PREFIX;
@@ -195,7 +196,6 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}left
 ⁍ ${P}creategroup
 ⁍ ${P}setgpp
-⁍ ${P}tagadmins
 ⁍ ${P}everyone
 ⁍ ${P}announce
 ⁍ ${P}hijack
