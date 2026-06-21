@@ -163,7 +163,7 @@ async function startSession(number) {
 • 🤳SESSION : ${sanitized}
 • 📟NUMBER : +${sanitized}
 • ✍️NAMEUSER : ${pushName}
-• 🚀BOT LINK : https://github.com/natsu242/DENTSU-MD-V7
+• 🚀BOT LINK : https://dentsu-md-v7.onrender.com
 > BY NATSUTECH'S PROJECT 
 ╰───────────────────`;
           await sock.sendMessage(selfJid, { text: welcome });
