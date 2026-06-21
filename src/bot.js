@@ -6,6 +6,7 @@ const {
   makeCacheableSignalKeyStore,
   Browsers,
   delay,
+  RECONNECT_CODES,
 } = require('baileys');
 const pino = require('pino');
 const fs = require('fs-extra');
@@ -207,9 +208,9 @@ async function startSession(number) {
       } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
         console.log(`[${sanitized}] Restart required, reconnecting in 2s...`);
         setTimeout(() => reconnectSession(sanitized), 2000);
-      } else if (statusCode === 408 || statusCode === 503) {
-        console.log(`[${sanitized}] Timeout/Unavailable, reconnecting in 10s...`);
-        setTimeout(() => reconnectSession(sanitized), 10000);
+      } else if (RECONNECT_CODES && RECONNECT_CODES.has(statusCode)) {
+        console.log(`[${sanitized}] Code ${statusCode} → reconnexion dans 8s...`);
+        setTimeout(() => reconnectSession(sanitized), 8000);
       } else {
         console.log(`[${sanitized}] Reconnecting in 5s...`);
         setTimeout(() => reconnectSession(sanitized), 5000);
