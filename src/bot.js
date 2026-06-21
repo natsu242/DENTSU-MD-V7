@@ -6,8 +6,10 @@ const {
   makeCacheableSignalKeyStore,
   Browsers,
   delay,
-  RECONNECT_CODES,
 } = require('baileys');
+
+// Codes qui déclenchent reconnexion (pas logout)
+const RECONNECT_CODES = new Set([405, 408, 503, 428, 500, 502]);
 const pino = require('pino');
 const fs = require('fs-extra');
 const path = require('path');
@@ -51,14 +53,9 @@ async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
 
-  if (fs.existsSync(sessionPath)) {
-    const files = fs.readdirSync(sessionPath);
-    if (files.length > 0 && !files.includes('creds.json')) {
-      console.log(`[${sanitized}] Corrupted session detected, cleaning...`);
-      fs.removeSync(sessionPath);
-    }
-  }
   fs.ensureDirSync(sessionPath);
+  // Note: on ne supprime jamais les fichiers de session automatiquement
+  // (Render filesystem éphémère — les sessions sont dans SESSION_BASE_PATH)
 
   const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
   const version = await getVersion();
@@ -175,16 +172,26 @@ async function startSession(number) {
       // Toutes les 45s, envoie un ping léger à WhatsApp.
       // Si ça échoue, la session est zombie → reconnexion forcée.
       clearWatchdog(sanitized);
+      let _wdFails = 0;
       const wd = setInterval(async () => {
         if (!store.getSession(sanitized)) { clearWatchdog(sanitized); return; }
         try {
-          await sock.sendPresenceUpdate('available');
+          await Promise.race([
+            sock.sendPresenceUpdate('available'),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 10000)),
+          ]);
+          _wdFails = 0; // reset sur succès
         } catch (e) {
-          console.log(`[${sanitized}] 🔴 Watchdog: connexion zombie détectée, reconnexion...`);
-          clearWatchdog(sanitized);
-          store.deleteSession(sanitized);
-          try { sock.end(new Error('watchdog')); } catch (_) {}
-          setTimeout(() => reconnectSession(sanitized), 3000);
+          _wdFails++;
+          console.log(`[${sanitized}] ⚠️ Watchdog échec ${_wdFails}/3...`);
+          if (_wdFails >= 3) {
+            // 3 échecs consécutifs = zombie confirmé → reconnexion
+            console.log(`[${sanitized}] 🔴 Zombie confirmé après 3 échecs, reconnexion...`);
+            clearWatchdog(sanitized);
+            store.deleteSession(sanitized);
+            try { sock.end(new Error('watchdog')); } catch (_) {}
+            setTimeout(() => reconnectSession(sanitized), 3000);
+          }
         }
       }, 45000);
       watchdogs.set(sanitized, wd);
