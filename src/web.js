@@ -106,9 +106,20 @@ app.get('/status', (req, res) => {
   res.json({ sessions, count: sessions.length, max: config.MAX_SESSIONS });
 });
 
+// ── Ping (UptimeRobot / BetterUptime / Cron-job.org) ──────────────
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong 🟢');
+});
+
 // ── Healthcheck Render ─────────────────────────────────────────────
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', bot: config.BOT_NAME, sessions: store.sessionCount(), uptime: Math.floor(process.uptime()) });
+  res.json({
+    status: 'ok',
+    bot: config.BOT_NAME,
+    sessions: store.sessionCount(),
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 function startWebServer() {
