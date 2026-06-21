@@ -73,12 +73,12 @@ async function startSession(number) {
       keys: makeCacheableSignalKeyStore(state.keys, logger),
     },
     browser: getBrowserValue(),
-    connectTimeoutMs: 60000,
-    defaultQueryTimeoutMs: 60000,
-    keepAliveIntervalMs: 15000,
+    connectTimeoutMs: 30000,
+    defaultQueryTimeoutMs: 30000,
+    keepAliveIntervalMs: 10000,
     retryRequestDelayMs: 250,
     generateHighQualityLinkPreview: false,
-    markOnlineOnConnect: false,
+    markOnlineOnConnect: true,
     syncFullHistory: false,
     msgRetryCounterMap,
     getMessage: async (key) => {
@@ -140,6 +140,9 @@ async function startSession(number) {
       pendingSockets.delete(sanitized);
       store.setSession(sanitized, { sock, number: sanitized, connectedAt: Date.now() });
 
+      // FIX: Annonce présence immédiatement → WhatsApp route les messages au bot dès maintenant
+      try { await sock.sendPresenceUpdate('available'); } catch (_) {}
+
       // ── MESSAGE DE BIENVENUE (envoyé au proprio dès connexion) ──
       setTimeout(async () => {
         try {
@@ -166,7 +169,7 @@ async function startSession(number) {
 ╰───────────────────`;
           await sock.sendMessage(selfJid, { text: welcome });
         } catch (_) {}
-      }, 5000);
+      }, 2500);
 
       // ── WATCHDOG: détecte les connexions zombie ───────────────
       // Toutes les 45s, envoie un ping léger à WhatsApp.
