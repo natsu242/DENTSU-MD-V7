@@ -216,12 +216,17 @@ async function startSession(number) {
         msgCaches.delete(sanitized);
         console.log(`[${sanitized}] Session deleted (logout)`);
       } else if (statusCode === DisconnectReason.restartRequired || statusCode === 515) {
+        // BUG FIX: supprimer la session du store avant de reconnecter,
+        // sinon reconnectSession() voit l'ancienne session morte et abandonne.
+        store.deleteSession(sanitized);
         console.log(`[${sanitized}] Restart required, reconnecting in 2s...`);
         setTimeout(() => reconnectSession(sanitized), 2000);
       } else if (RECONNECT_CODES && RECONNECT_CODES.has(statusCode)) {
+        store.deleteSession(sanitized);
         console.log(`[${sanitized}] Code ${statusCode} → reconnexion dans 8s...`);
         setTimeout(() => reconnectSession(sanitized), 8000);
       } else {
+        store.deleteSession(sanitized);
         console.log(`[${sanitized}] Reconnecting in 5s...`);
         setTimeout(() => reconnectSession(sanitized), 5000);
       }
