@@ -81,7 +81,7 @@ async function handle(ctx) {
       const s = Math.floor(uptime % 60);
       await sock.sendMessage(from, {
         image: { url: config.MENU_IMAGE },
-        caption: `✅ *DENTSU MD V7 est en ligne!*\n\n⏱️ Runtime: ${h}h ${m2}m ${s}s\n👤 Sessions actives: ${store.sessionCount()}\n📱 Mode: ${config.MODE}\n🌍 Host: ${process.env.RENDER_EXTERNAL_URL || 'Local'}\n\n${config.BOT_FOOTER}`
+        caption: `✅ *DENTSU MD V9 est en ligne!*\n\n⏱️ Runtime: ${h}h ${m2}m ${s}s\n👤 Sessions actives: ${store.sessionCount()}\n📱 Mode: ${config.MODE}\n🌍 Host: ${process.env.RENDER_EXTERNAL_URL || 'Local'}\n\n${config.BOT_FOOTER}`
       }, { quoted: msg });
       return true;
     }
@@ -143,7 +143,7 @@ async function handle(ctx) {
       let sent = 0;
       for (const [num, sess] of sessions) {
         try {
-          await sess.sock.sendMessage(num + '@s.whatsapp.net', { text: `📢 *Broadcast DENTSU MD V7*\n\n${text}\n\n${config.BOT_FOOTER}` });
+          await sess.sock.sendMessage(num + '@s.whatsapp.net', { text: `📢 *Broadcast DENTSU MD V9*\n\n${text}\n\n${config.BOT_FOOTER}` });
           sent++;
           await delay(1000);
         } catch(e) {}

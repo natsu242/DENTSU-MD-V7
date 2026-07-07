@@ -1,7 +1,7 @@
 {
-  "name": "dentsu-md-v7",
+  "name": "dentsu-md-v9",
   "version": "7.0.0",
-  "description": "DENTSU MD V7 - Bot WhatsApp Multi-Sessions by Natsu Tech",
+  "description": "DENTSU MD V9 - Bot WhatsApp Multi-Sessions by Natsu Tech",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

@@ -116,13 +116,13 @@ async function startSession(number) {
         if (action === 'add') {
           await sock.sendMessage(id, {
             image: { url: config.MENU_IMAGE },
-            caption: `╔╦══════════════════╦╗\n║║   *WELCOME* 🎉   ║║\n╚╩══════════════════╩╝\n\n👋 Welcome @${num} to *${meta.subject}*!\n\nWe're glad to have you here. Please read the group rules.\n\n_Powered by DENTSU MD V7_`,
+            caption: `╔╦══════════════════╦╗\n║║   *WELCOME* 🎉   ║║\n╚╩══════════════════╩╝\n\n👋 Welcome @${num} to *${meta.subject}*!\n\nWe're glad to have you here. Please read the group rules.\n\n_Powered by DENTSU MD V9_`,
             mentions: [jid],
           });
         } else if (action === 'remove') {
           await sock.sendMessage(id, {
             image: { url: config.MENU_IMAGE },
-            caption: `╔╦══════════════════╦╗\n║║   *GOODBYE* 👋   ║║\n╚╩══════════════════╩╝\n\n😢 @${num} has left *${meta.subject}*.\n\nWe'll miss you! Come back anytime.\n\n_Powered by DENTSU MD V7_`,
+            caption: `╔╦══════════════════╦╗\n║║   *GOODBYE* 👋   ║║\n╚╩══════════════════╩╝\n\n😢 @${num} has left *${meta.subject}*.\n\nWe'll miss you! Come back anytime.\n\n_Powered by DENTSU MD V9_`,
             mentions: [jid],
           });
         }
@@ -157,14 +157,14 @@ async function startSession(number) {
           const selfJid = sanitized + '@s.whatsapp.net';
           const welcome =
 `╭───────────────────
-• DENTSU MD V7 ACTIF 🟢
+• DENTSU MD V9 ACTIF 🟢
 
 • 📆DATE : ${date}
 • ⌚HEURE : ${heure}
 • 🤳SESSION : ${sanitized}
 • 📟NUMBER : +${sanitized}
 • ✍️NAMEUSER : ${pushName}
-• 🚀BOT LINK : https://dentsu-md-v7.onrender.com
+• 🚀BOT LINK : https://dentsu-md-v9.onrender.com
 > BY NATSUTECH'S PROJECT 
 ╰───────────────────`;
           await sock.sendMessage(selfJid, { text: welcome });

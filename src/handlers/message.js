@@ -152,16 +152,16 @@ async function sendMainMenu(ctx) {
 
   const P = config.PREFIX;
   const caption =
-`『 *DENTSU MD V7* 』
+`『 *DENTSU MD V9* 』
 ────────────────────────────
 ⁍ *Bot:* DENTSU MD
-⁍ *Version:* V7
+⁍ *Version:* V9
 ⁍ *Date:* ${getDate()}
 ⁍ *Time:* ${getTime()}
 ⁍ *User:* @${senderNumber}
 ⁍ *Mode:* ${(config.MODE || 'public').toUpperCase()}
 ⁍ *Ram:* ${getRam()}
-⁍ *Host:* dentsu-md-v7.onrender.com
+⁍ *Host:* dentsu-md-v9.onrender.com
 ────────────────────────────
 
 【 👥 GROUP MENU 】
@@ -357,9 +357,9 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}rwaifu
 
 ────────────────────────────
-🌐 *Website* → dentsu-md-v7.onrender.com
+🌐 *Website* → dentsu-md-v9.onrender.com
 📋 *Prefix* → ${P}
-> _Powered by DENTSU MD V7 🤖_`;
+> _Powered by DENTSU MD V9 🤖_`;
 
   try {
     await sock.sendMessage(from, {

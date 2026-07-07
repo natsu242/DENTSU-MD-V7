@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL || '';
 if (!import.meta.env.VITE_API_URL) {
   console.warn('[DENTSU] VITE_API_URL non défini — les appels API échoueront en production. Ajoute-le dans les variables Vercel.');
 }
-const BOT_NAME = import.meta.env.VITE_BOT_NAME || 'DENTSU MD V7';
+const BOT_NAME = import.meta.env.VITE_BOT_NAME || 'DENTSU MD V9';
 const DEV_NAME = import.meta.env.VITE_DEV_NAME || 'Natsu Tech';
 const BOT_IMAGE = import.meta.env.VITE_BOT_IMAGE || 'https://files.catbox.moe/2ej8eo.jpg';
 const CHANNEL_LINK = import.meta.env.VITE_CHANNEL_LINK || 'https://whatsapp.com/channel/0029VbC1s7fFnSz1YhZYc01h';

@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 module.exports = {
-  BOT_NAME: process.env.BOT_NAME || 'DENTSU MD V7',
+  BOT_NAME: process.env.BOT_NAME || 'DENTSU MD V9',
   DEV_NAME: process.env.DEV_NAME || 'Natsu Tech',
   PREFIX: process.env.PREFIX || '.',
   PREFIXES: (process.env.PREFIXES || '.,!,/,#,$').split(',').map(p => p.trim()).filter(Boolean),
@@ -17,13 +17,13 @@ module.exports = {
   AUTO_TYPING: process.env.AUTO_TYPING === 'true',
   AUTO_LIKE_EMOJI: ['💋','😶','✨️','💗','🎈','🎉','🥳','❤️','🧫','🐭'],
   MAX_RETRIES: 3,
-  MENU_IMAGE: process.env.MENU_IMAGE || 'https://raw.githubusercontent.com/natsu242/DENTSU-MD-V7/main/assets/menu.png',
+  MENU_IMAGE: process.env.MENU_IMAGE || 'https://raw.githubusercontent.com/natsu242/DENTSU-MD-V9/main/assets/menu.png',
   RCD_IMAGE: process.env.RCD_IMAGE || 'https://files.catbox.moe/s1ggtt.jpeg',
   CHANNEL_LINK: process.env.CHANNEL_LINK || 'https://whatsapp.com/channel/0029VbC1s7fFnSz1YhZYc01h',
   CHANNEL_LINK2: 'https://whatsapp.com/channel/0029VayOeIbGufIvDPhi6m1X',
   GROUP_LINK: process.env.GROUP_LINK || 'https://chat.whatsapp.com/GtXASqDdchAFvEJ95cQQ0F',
   NEWSLETTER_JID: process.env.NEWSLETTER_JID || '120363423640959729@newsletter',
-  WEBSITE: process.env.WEBSITE || 'https://dentsu-md-v7.onrender.com',
+  WEBSITE: process.env.WEBSITE || 'https://dentsu-md-v9.onrender.com',
   TELEGRAM: process.env.TELEGRAM || 'https://t.me/Natsu_or_Dentsu',
   OTP_EXPIRY: 300000,
 };
