@@ -7,7 +7,7 @@ if (!import.meta.env.VITE_API_URL) {
 }
 const BOT_NAME = import.meta.env.VITE_BOT_NAME || 'DENTSU MD V9';
 const DEV_NAME = import.meta.env.VITE_DEV_NAME || 'Natsu Tech';
-const BOT_IMAGE = import.meta.env.VITE_BOT_IMAGE || 'https://files.catbox.moe/2ej8eo.jpg';
+const BOT_IMAGE = import.meta.env.VITE_BOT_IMAGE || 'https://files.catbox.moe/uwcemj.jpg';
 const CHANNEL_LINK = import.meta.env.VITE_CHANNEL_LINK || 'https://whatsapp.com/channel/0029VbC1s7fFnSz1YhZYc01h';
 const GROUP_LINK = import.meta.env.VITE_GROUP_LINK || 'https://chat.whatsapp.com/GtXASqDdchAFvEJ95cQQ0F';
 const TELEGRAM = import.meta.env.VITE_TELEGRAM || 'https://t.me/Natsu_or_Dentsu';
@@ -198,20 +198,6 @@ export default function App() {
       {/* Main */}
       {!showLangOverlay && (
         <div className="container">
-          {/* Lang switcher */}
-          <div className="lang-switcher">
-            {langMeta.map(l => (
-              <button
-                key={l.code}
-                className={`flag-mini ${lang === l.code ? 'active' : ''}`}
-                onClick={() => selectLang(l.code)}
-                title={l.name}
-              >
-                <FlagImg code={l.flag} size={24} />
-              </button>
-            ))}
-          </div>
-
           {/* Header */}
           <header className="header">
             <div className="bot-img-wrap">
@@ -221,10 +207,6 @@ export default function App() {
             <h1 className="bot-name">{BOT_NAME}</h1>
             <p className="bot-dev">by {DEV_NAME}</p>
             <div className="stats-row">
-              <div className="stat-badge">
-                <span className="stat-dot" />
-                <span>{sessions} {t.sessions} {t.sessionsOf} {MAX_SESSIONS}</span>
-              </div>
               <div className="stat-badge stat-cmd">
                 <span>⚡ {t.commandsCount}</span>
               </div>
