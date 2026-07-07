@@ -4,7 +4,27 @@ const { startSession } = require('./bot');
 const store = require('./lib/store');
 const config = require('./config');
 
+const cors = require('cors');
+
 const app = express();
+
+// CORS — permet au frontend Vercel d'appeler l'API Railway
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
+  : ['*'];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'OPTIONS'],
+  credentials: false,
+}));
+app.options('*', cors());
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../website/views'));
