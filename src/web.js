@@ -8,23 +8,37 @@ const cors = require('cors');
 
 const app = express();
 
-// CORS — permet au frontend Vercel d'appeler l'API Railway
-const allowedOrigins = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(',').map(o => o.trim())
-  : ['*'];
+// ── CORS ──────────────────────────────────────────────────────────
+// Requiert FRONTEND_URL en production. Accepte toutes origines uniquement
+// si NODE_ENV !== 'production' (dev local uniquement).
+const rawOrigins = process.env.FRONTEND_URL;
+const isProd = process.env.NODE_ENV === 'production';
 
-app.use(cors({
+if (isProd && !rawOrigins) {
+  console.warn('[CORS] ⚠ FRONTEND_URL non défini en production — CORS restreint aux requêtes same-origin uniquement.');
+}
+
+const allowedOrigins = rawOrigins
+  ? rawOrigins.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
+
+const corsOptions = {
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Not allowed by CORS'));
-    }
+    // Pas d'origine = requête same-origin ou curl/Postman : toujours autorisé
+    if (!origin) return cb(null, true);
+    // En dev sans FRONTEND_URL : accepte tout (debug)
+    if (!isProd && allowedOrigins.length === 0) return cb(null, true);
+    // Vérifie l'origine
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error(`Origin non autorisée : ${origin}`));
   },
   methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type'],
   credentials: false,
-}));
-app.options('*', cors());
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // politique uniforme pour les preflight
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../website/views'));
