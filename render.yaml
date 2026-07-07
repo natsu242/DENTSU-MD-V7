@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: dentsu-md-v7
+    name: dentsu-md-v9
     runtime: node
     buildCommand: npm install
     startCommand: npm start
@@ -8,17 +8,17 @@ services:
       - key: PORT
         value: 3000
       - key: BOT_NAME
-        value: "DENTSU MD V7"
+        value: "DENTSU MD V9"
       - key: DEV_NAME
-        value: "Natsu Tech"
+        value: "NatsuTechs"
       - key: PREFIX
         value: "."
       - key: MODE
         value: "public"
       - key: OWNER_NUMBER
-        value: "242065121108"
+        value: "224624977006"
       - key: MENU_IMAGE
-        value: "https://files.catbox.moe/2ej8eo.jpg"
+        value: "https://files.catbox.moe/uwcemj.jpg"
       - key: CHANNEL_LINK
         value: "https://whatsapp.com/channel/0029VbC1s7fFnSz1YhZYc01h"
       - key: GROUP_LINK
@@ -26,7 +26,7 @@ services:
       - key: TELEGRAM
         value: "https://t.me/Natsu_or_Dentsu"
       - key: WEBSITE
-        value: "https://dentsu-md-v7.onrender.com"
+        value: "https://dentsu-md-v9.onrender.com"
       - key: MAX_SESSIONS
         value: "50"
       - key: NODE_ENV
