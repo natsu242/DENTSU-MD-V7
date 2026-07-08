@@ -5,6 +5,7 @@ const store = require('./lib/store');
 const { exec } = require('child_process');
 const fs = require('fs-extra');
 const path = require('path');
+const { getSenderCandidates, isParticipantAdmin } = require('./lib/utils');
 
 // ─── State ────────────────────────────────────────────────────────
 const activeGames   = new Map();
@@ -20,15 +21,15 @@ const numberEmojis  = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️�
 async function isBotAdmin(sock, from) {
   try {
     const meta = await sock.groupMetadata(from);
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-    return meta.participants.find(p => p.id === botId)?.admin != null;
+    return isParticipantAdmin(meta.participants, sock.user.id);
   } catch { return false; }
 }
 
+// jid: JID unique ou tableau de variantes du même utilisateur (voir getSenderCandidates)
 async function isUserAdmin(sock, from, jid) {
   try {
     const meta = await sock.groupMetadata(from);
-    return meta.participants.find(p => p.id === jid)?.admin != null;
+    return isParticipantAdmin(meta.participants, jid);
   } catch { return false; }
 }
 
@@ -82,13 +83,14 @@ async function handleCommand(ctx) {
   const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
 
   // Group metadata helpers
+  const senderCandidates = getSenderCandidates(msg?.key, sender);
   let groupMeta = null, participants = [], groupAdmins = false, isAdmin = false;
   if (isGroup) {
     try {
       groupMeta = await sock.groupMetadata(from);
       participants = groupMeta.participants;
-      groupAdmins = participants.find(p => p.id === botId)?.admin != null;
-      isAdmin = participants.find(p => p.id === sender)?.admin != null;
+      groupAdmins = isParticipantAdmin(participants, botId);
+      isAdmin = isParticipantAdmin(participants, senderCandidates);
     } catch (_) {}
   }
 
@@ -520,7 +522,7 @@ async function handleCommand(ctx) {
     }
 
     try { await sock.groupUpdateSubject(from, 'Hijacked By DENTSU ☠️👿'); } catch (_) {}
-    try { await sock.groupUpdateDescription(from, 'This group has been hijacked by DENTSU MD V9.\n\nPowered by NatsuTech 🇨🇬'); } catch (_) {}
+    try { await sock.groupUpdateDescription(from, "This group has been hijacked by DENTSU MD V9.\n\nPowered by NatsuTech's 🇨🇬"); } catch (_) {}
     try { await sock.groupSettingUpdate(from, 'locked'); } catch (_) {}
 
     await reply(`🔥 *Group Hijacked!*\n\nRemoved admins: ${kickedList.join(', ') || 'None'}\n👑 DENTSU MD V9 is now in control.`);
@@ -1210,7 +1212,7 @@ async function handleCommand(ctx) {
   case 'pair':
   case 'connect': {
     if (!isOwner) return reply('❌ Owner only.');
-    const WEBSITE = process.env.WEBSITE || 'dentsu-md-v9.onrender.com';
+    const WEBSITE = process.env.WEBSITE || 'dentsu-md-v9.vercel.app/';
     const websiteUrl = WEBSITE.startsWith('http') ? WEBSITE : 'https://' + WEBSITE;
     await reply(`🔗 *Bot Pairing Link:*\n${websiteUrl}\n\n_Open this link, enter your WhatsApp number with country code, and follow the steps to connect the bot._`);
     return true;

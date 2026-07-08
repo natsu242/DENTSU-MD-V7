@@ -48,8 +48,57 @@ function sleep(ms) {
 }
 
 function isOwner(jid) {
-  const ownerJid = config.OWNER_NUMBER + '@s.whatsapp.net';
-  return jid === ownerJid;
+  // Comparaison normalisée (ignore suffixe d'appareil / variantes @lid) pour éviter
+  // les faux négatifs sur les commandes réservées au propriétaire, même bug que
+  // pour les vérifications admin de groupe (voir jidsMatch plus bas).
+  return jidsMatch(jid, config.OWNER_NUMBER + '@s.whatsapp.net');
+}
+
+// ── Robust JID comparison (fixe le bug "Admin only" alors que l'utilisateur EST admin) ──
+// Cause: WhatsApp/Baileys peut représenter le même utilisateur avec des JID différents
+// selon le contexte (suffixe d'appareil ":12", format @lid vs @s.whatsapp.net, etc).
+// On compare uniquement la partie "user" (numéro) après avoir retiré le suffixe d'appareil,
+// et on teste tous les champs d'identité possibles (id, jid, lid, phoneNumber).
+function normalizeJidUser(jid) {
+  if (!jid || typeof jid !== 'string') return null;
+  return jid.split('@')[0].split(':')[0];
+}
+
+function jidsMatch(a, b) {
+  const ua = normalizeJidUser(a);
+  const ub = normalizeJidUser(b);
+  return !!ua && !!ub && ua === ub;
+}
+
+// Construit toutes les variantes possibles du JID de l'expéditeur à partir du message brut
+function getSenderCandidates(msgKey, sender) {
+  const candidates = new Set();
+  if (sender) candidates.add(sender);
+  if (msgKey) {
+    if (msgKey.participant) candidates.add(msgKey.participant);
+    if (msgKey.participantAlt) candidates.add(msgKey.participantAlt);
+    if (msgKey.participantPn) candidates.add(msgKey.participantPn);
+    if (msgKey.participantLid) candidates.add(msgKey.participantLid);
+    if (msgKey.remoteJidAlt) candidates.add(msgKey.remoteJidAlt);
+  }
+  return Array.from(candidates).filter(Boolean);
+}
+
+// Cherche un participant dans la liste du groupe en comparant tous les champs d'identité
+// possibles (id, jid, lid, phoneNumber) contre toutes les variantes du sender.
+function findParticipant(participants, senderCandidates) {
+  if (!Array.isArray(participants)) return null;
+  const candidates = Array.isArray(senderCandidates) ? senderCandidates : [senderCandidates];
+  return participants.find(p => {
+    const fields = [p.id, p.jid, p.lid, p.phoneNumber].filter(Boolean);
+    return fields.some(f => candidates.some(c => jidsMatch(f, c)));
+  }) || null;
+}
+
+// Vérifie si l'expéditeur (sender + toutes ses variantes de JID) est admin du groupe.
+function isParticipantAdmin(participants, senderCandidates) {
+  const p = findParticipant(participants, senderCandidates);
+  return p?.admin != null; // 'admin' ou 'superadmin'
 }
 
 async function countCommands() {
@@ -87,5 +136,6 @@ function getHost() {
 module.exports = {
   getTimestamp, getDate, getTime, getRam, getUptime,
   formatBytes, generateOTP, sleep, isOwner,
-  countCommands, formatMenu, getHost
+  countCommands, formatMenu, getHost,
+  normalizeJidUser, jidsMatch, getSenderCandidates, findParticipant, isParticipantAdmin,
 };

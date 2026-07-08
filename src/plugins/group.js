@@ -1,5 +1,6 @@
 const config = require('../config');
 const { delay } = require('baileys');
+const { getSenderCandidates, isParticipantAdmin, normalizeJidUser } = require('../lib/utils');
 
 const GROUP_MENU = `
 ╔══════════════════════╗
@@ -60,18 +61,20 @@ const GROUP_MENU = `
 
 ${config.BOT_FOOTER}`;
 
+// jid: soit un JID unique, soit un tableau de variantes possibles du même utilisateur
+// (voir getSenderCandidates dans lib/utils — corrige le bug "Admin only" alors que
+// l'utilisateur est bien admin, causé par des JID représentés différemment selon le contexte).
 async function isAdmin(sock, from, jid) {
   try {
     const meta = await sock.groupMetadata(from);
-    return meta.participants.find(p => p.id === jid)?.admin != null;
+    return isParticipantAdmin(meta.participants, jid);
   } catch(e) { return false; }
 }
 
 async function isBotAdmin(sock, from) {
   try {
     const meta = await sock.groupMetadata(from);
-    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-    return meta.participants.find(p => p.id === botId)?.admin != null;
+    return isParticipantAdmin(meta.participants, sock.user.id);
   } catch(e) { return false; }
 }
 
@@ -81,6 +84,7 @@ function getMentioned(msg) {
 
 async function handle(ctx) {
   const { command, text, reply, sock, from, msg, sender, isGroup, args } = ctx;
+  const senderCandidates = getSenderCandidates(msg?.key, sender);
 
   if (command === 'groupmenu') {
     await sock.sendMessage(from, {
@@ -107,7 +111,7 @@ async function handle(ctx) {
     case 'everyone':
     case 'rtag':
     case 'totag': {
-      if (!ctx.isOwner) { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin) return reply('❌ Admin uniquement.'); }
+      if (!ctx.isOwner) { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin) return reply('❌ Admin uniquement.'); }
       try {
         const meta = await sock.groupMetadata(from);
         const members = meta.participants;
@@ -122,7 +126,7 @@ async function handle(ctx) {
     }
 
     case 'hidetag': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         const meta = await sock.groupMetadata(from);
         const mentions = meta.participants.map(m => m.id);
@@ -135,7 +139,7 @@ async function handle(ctx) {
     }
 
     case 'promote': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
       try {
@@ -146,7 +150,7 @@ async function handle(ctx) {
     }
 
     case 'demote': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
       try {
@@ -157,7 +161,7 @@ async function handle(ctx) {
     }
 
     case 'kick': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
       try {
@@ -168,7 +172,7 @@ async function handle(ctx) {
     }
 
     case 'add': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!args[0]) return reply('❌ Donne un numéro! Ex: .add 242XXXXXXX');
       const num = args[0].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
       try {
@@ -180,7 +184,7 @@ async function handle(ctx) {
 
     case 'mute':
     case 'closegc': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'announcement');
         reply('🔇 Groupe mis en mode silence (admins seulement)');
@@ -190,7 +194,7 @@ async function handle(ctx) {
 
     case 'unmute':
     case 'opengc': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'not_announcement');
         reply('🔊 Groupe ouvert à tous!');
@@ -209,7 +213,7 @@ async function handle(ctx) {
 
     case 'resetlink':
     case 'revoke': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupRevokeInvite(from);
         const link = await sock.groupInviteCode(from);
@@ -266,7 +270,7 @@ async function handle(ctx) {
     }
 
     case 'subject': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!text) return reply('❌ Donne un nouveau nom!');
       try {
         await sock.groupUpdateSubject(from, text);
@@ -276,7 +280,7 @@ async function handle(ctx) {
     }
 
     case 'desc': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!text) return reply('❌ Donne une description!');
       try {
         await sock.groupUpdateDescription(from, text);
@@ -307,7 +311,7 @@ async function handle(ctx) {
     }
 
     case 'poll': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       if (!text) return reply('❌ Usage: .poll Question | Option1 | Option2');
       const parts = text.split('|').map(s => s.trim());
       if (parts.length < 3) return reply('❌ Minimum 2 options! Ex: .poll Question | Option1 | Option2');
@@ -324,7 +328,7 @@ async function handle(ctx) {
     }
 
     case 'warn': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const { warnStore } = require('../lib/store');
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
@@ -349,7 +353,7 @@ async function handle(ctx) {
     }
 
     case 'warnreset': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       const { warnStore } = require('../lib/store');
       const mentioned = getMentioned(msg);
       if (!mentioned.length) return reply('❌ Mentionne un utilisateur!');
@@ -368,7 +372,7 @@ async function handle(ctx) {
     }
 
     case 'lock': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'locked');
         reply('🔒 Groupe verrouillé (seuls les admins peuvent modifier les infos)');
@@ -377,7 +381,7 @@ async function handle(ctx) {
     }
 
     case 'unlock': {
-      { const userAdmin = await isAdmin(sock, from, sender); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
+      { const userAdmin = await isAdmin(sock, from, senderCandidates); if (!userAdmin && !ctx.isOwner) return reply('❌ Admin uniquement.'); }
       try {
         await sock.groupSettingUpdate(from, 'unlocked');
         reply('🔓 Groupe déverrouillé!');

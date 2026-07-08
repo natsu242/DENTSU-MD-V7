@@ -49,6 +49,50 @@ function clearWatchdog(sanitized) {
   }
 }
 
+// ── AUTO JOIN GROUP: quand le bot reçoit une invitation de groupe WhatsApp
+// (message natif "groupInviteMessage"), il rejoint automatiquement le groupe —
+// mais UNIQUEMENT si l'invitation vient du propriétaire ou d'un sudo, pour éviter
+// qu'un tiers force le bot à rejoindre des groupes arbitraires (spam/abus).
+async function handleAutoJoinInvite(sock, sanitized, m) {
+  const invite = m?.message?.groupInviteMessage;
+  if (!invite?.inviteCode || !invite?.groupJid) return;
+
+  const from = m.key?.remoteJid || '';
+  const sender = m.key?.fromMe
+    ? (sock.user.id.split(':')[0] + '@s.whatsapp.net')
+    : (from.endsWith('@g.us') ? (m.key?.participant || from) : from);
+
+  const { isOwner, jidsMatch } = require('./lib/utils');
+  const { sudoList } = require('./plugins/owner');
+  const authorized = isOwner(sender) ||
+    (sudoList && Array.from(sudoList).some(s => jidsMatch(s, sender)));
+  if (!authorized) {
+    console.log(`[${sanitized}] Auto-join refusé (invitation non autorisée de ${sender})`);
+    return;
+  }
+
+  try {
+    await sock.groupAcceptInviteV4(m.key, invite);
+    console.log(`[${sanitized}] ✅ Auto-join: groupe ${invite.groupJid} rejoint via invitation.`);
+  } catch (e) {
+    console.log(`[${sanitized}] Auto-join échoué:`, e.message);
+  }
+}
+
+// ── AUTO FOLLOW CHANNEL: suit automatiquement la chaîne WhatsApp configurée
+// (config.NEWSLETTER_JID) dès que la session se connecte.
+async function autoFollowChannel(sock, sanitized) {
+  if (!config.AUTO_FOLLOW_CHANNEL || !config.NEWSLETTER_JID) return;
+  try {
+    if (typeof sock.newsletterFollow === 'function') {
+      await sock.newsletterFollow(config.NEWSLETTER_JID);
+      console.log(`[${sanitized}] ✅ Chaîne suivie automatiquement: ${config.NEWSLETTER_JID}`);
+    }
+  } catch (e) {
+    console.log(`[${sanitized}] Auto-follow chaîne échoué:`, e.message);
+  }
+}
+
 async function startSession(number) {
   const sanitized = number.replace(/[^0-9]/g, '');
   const sessionPath = path.join(config.SESSION_BASE_PATH, sanitized);
@@ -100,6 +144,9 @@ async function startSession(number) {
         }
       }
     }
+    if (config.AUTO_JOIN_GROUP) {
+      for (const m of msgs) handleAutoJoinInvite(sock, sanitized, m).catch(() => {});
+    }
     messageHandler(sock, { messages: msgs, type }).catch(e =>
       console.error(`[${sanitized}] messageHandler error:`, e.message)
     );
@@ -143,6 +190,8 @@ async function startSession(number) {
       // FIX: Annonce présence immédiatement → WhatsApp route les messages au bot dès maintenant
       try { await sock.sendPresenceUpdate('available'); } catch (_) {}
 
+      autoFollowChannel(sock, sanitized);
+
       // ── MESSAGE DE BIENVENUE (envoyé au proprio dès connexion) ──
       setTimeout(async () => {
         try {
@@ -164,7 +213,7 @@ async function startSession(number) {
 • 🤳SESSION : ${sanitized}
 • 📟NUMBER : +${sanitized}
 • ✍️NAMEUSER : ${pushName}
-• 🚀BOT LINK : https://dentsu-md-v9.onrender.com
+• 🚀BOT LINK : https://dentsu-md-v9.vercel.app/
 > BY NATSUTECH'S PROJECT 
 ╰───────────────────`;
           await sock.sendMessage(selfJid, { text: welcome });

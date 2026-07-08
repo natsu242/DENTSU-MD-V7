@@ -55,10 +55,12 @@ async function handle(ctx) {
     return true;
   }
 
+  // Commandes réservées au propriétaire uniquement (gestion du compte/bot).
+  // Toutes les autres commandes (ping, alive, runtime, etc.) sont publiques.
   const ownerOnly = ['setpp','ban','unban','self','public','autoread','autobio','autorecording',
     'autotyping','autoviewstatus','autoreact','block','unblock','delete','setaccount',
     'addsudo','delsudo','listsudo','fixowner','getbot','broadcast','mode','leaveall','listgc',
-    'del','ping','alive','runtime','autodownload'];
+    'del','autodownload'];
 
   if (ownerOnly.includes(command) && !ctx.isOwner && !sudoList.has(sender)) {
     return reply('❌ Cette commande est réservée au propriétaire!');
@@ -283,4 +285,4 @@ async function handle(ctx) {
   }
 }
 
-module.exports = { handle };
+module.exports = { handle, sudoList };

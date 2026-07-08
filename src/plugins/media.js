@@ -74,7 +74,7 @@ async function handle(ctx) {
     case 'take': {
       if (!quotedMsg?.stickerMessage) return reply(`❌ Réponds à un sticker!\nUsage: ${config.PREFIX}take [nom] [auteur]\n\n${config.BOT_FOOTER}`);
       const packname = args[0] || 'DENTSU MD V9';
-      const author = args[1] || 'Natsu Tech';
+      const author = args[1] || "NatsuTech's";
       reply(`✅ Sticker renommé!\n📦 Pack: ${packname}\n👤 Auteur: ${author}\n\n(Fonctionnalité complète avec sharp/ffmpeg)\n\n${config.BOT_FOOTER}`);
       return true;
     }

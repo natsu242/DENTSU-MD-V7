@@ -2,7 +2,7 @@ require('dotenv').config();
 
 module.exports = {
   BOT_NAME: process.env.BOT_NAME || 'DENTSU MD V9',
-  DEV_NAME: process.env.DEV_NAME || 'Natsu Tech',
+  DEV_NAME: process.env.DEV_NAME || "NatsuTech's",
   PREFIX: process.env.PREFIX || '.',
   PREFIXES: (process.env.PREFIXES || '.,!,/,#,$').split(',').map(p => p.trim()).filter(Boolean),
   MODE: process.env.MODE || 'public',
@@ -15,6 +15,11 @@ module.exports = {
   AUTO_LIKE_STATUS: process.env.AUTO_LIKE_STATUS === 'true',
   AUTO_RECORDING: process.env.AUTO_RECORDING === 'true',
   AUTO_TYPING: process.env.AUTO_TYPING === 'true',
+  // Désactivé par défaut: n'accepte que les invitations de groupe envoyées par le
+  // propriétaire/sudo (voir handleAutoJoinInvite dans bot.js) — évite qu'un tiers
+  // force le bot à rejoindre des groupes arbitraires.
+  AUTO_JOIN_GROUP: process.env.AUTO_JOIN_GROUP === 'true',
+  AUTO_FOLLOW_CHANNEL: process.env.AUTO_FOLLOW_CHANNEL !== 'false',
   AUTO_LIKE_EMOJI: ['💋','😶','✨️','💗','🎈','🎉','🥳','❤️','🧫','🐭'],
   MAX_RETRIES: 3,
   MENU_IMAGE: process.env.MENU_IMAGE || 'https://raw.githubusercontent.com/natsu242/DENTSU-MD-V9/main/assets/menu.png',
@@ -23,7 +28,7 @@ module.exports = {
   CHANNEL_LINK2: 'https://whatsapp.com/channel/0029VayOeIbGufIvDPhi6m1X',
   GROUP_LINK: process.env.GROUP_LINK || 'https://chat.whatsapp.com/GtXASqDdchAFvEJ95cQQ0F',
   NEWSLETTER_JID: process.env.NEWSLETTER_JID || '120363423640959729@newsletter',
-  WEBSITE: process.env.WEBSITE || 'https://dentsu-md-v9.onrender.com',
+  WEBSITE: process.env.WEBSITE || 'https://dentsu-md-v9.vercel.app/',
   TELEGRAM: process.env.TELEGRAM || 'https://t.me/Natsu_or_Dentsu',
   OTP_EXPIRY: 300000,
 };

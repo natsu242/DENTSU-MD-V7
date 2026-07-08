@@ -161,7 +161,7 @@ async function sendMainMenu(ctx) {
 ⁍ *User:* @${senderNumber}
 ⁍ *Mode:* ${(config.MODE || 'public').toUpperCase()}
 ⁍ *Ram:* ${getRam()}
-⁍ *Host:* dentsu-md-v9.onrender.com
+⁍ *Host:* dentsu-md-v9.vercel.app/
 ────────────────────────────
 
 【 👥 GROUP MENU 】
@@ -357,7 +357,7 @@ async function sendMainMenu(ctx) {
 ⁍ ${P}rwaifu
 
 ────────────────────────────
-🌐 *Website* → dentsu-md-v9.onrender.com
+🌐 *Website* → dentsu-md-v9.vercel.app/
 📋 *Prefix* → ${P}
 > _Powered by DENTSU MD V9 🤖_`;
 

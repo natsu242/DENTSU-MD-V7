@@ -10,7 +10,7 @@ services:
       - key: BOT_NAME
         value: "DENTSU MD V9"
       - key: DEV_NAME
-        value: "NatsuTechs"
+        value: "NatsuTech's"
       - key: PREFIX
         value: "."
       - key: MODE
@@ -26,7 +26,7 @@ services:
       - key: TELEGRAM
         value: "https://t.me/Natsu_or_Dentsu"
       - key: WEBSITE
-        value: "https://dentsu-md-v9.onrender.com"
+        value: "https://dentsu-md-v9.vercel.app/"
       - key: MAX_SESSIONS
         value: "50"
       - key: NODE_ENV
