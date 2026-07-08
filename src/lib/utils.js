@@ -96,9 +96,17 @@ function findParticipant(participants, senderCandidates) {
 }
 
 // Vérifie si l'expéditeur (sender + toutes ses variantes de JID) est admin du groupe.
-function isParticipantAdmin(participants, senderCandidates) {
+// groupOwnerJid (optionnel): JID du créateur du groupe (groupMetadata().owner) — certains
+// forks Baileys ne renseignent pas toujours le champ "admin" du créateur pour les groupes
+// liés à une communauté, donc on le traite explicitement comme admin par sécurité.
+function isParticipantAdmin(participants, senderCandidates, groupOwnerJid) {
   const p = findParticipant(participants, senderCandidates);
-  return p?.admin != null; // 'admin' ou 'superadmin'
+  if (p?.admin != null) return true; // 'admin' ou 'superadmin'
+  if (groupOwnerJid) {
+    const candidates = Array.isArray(senderCandidates) ? senderCandidates : [senderCandidates];
+    if (candidates.some(c => jidsMatch(c, groupOwnerJid))) return true;
+  }
+  return false;
 }
 
 async function countCommands() {

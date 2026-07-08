@@ -89,8 +89,8 @@ async function handleCommand(ctx) {
     try {
       groupMeta = await sock.groupMetadata(from);
       participants = groupMeta.participants;
-      groupAdmins = isParticipantAdmin(participants, botId);
-      isAdmin = isParticipantAdmin(participants, senderCandidates);
+      groupAdmins = isParticipantAdmin(participants, botId, groupMeta.owner);
+      isAdmin = isParticipantAdmin(participants, senderCandidates, groupMeta.owner);
     } catch (_) {}
   }
 
@@ -306,9 +306,11 @@ async function handleCommand(ctx) {
 
   case 'resetlink':
   case 'revoke': {
-    if (!isGroup)
-    if (!isOwner && !isAdmin) return reply('❌ Admin only.');
+    // BUG FIX: le "if" sans accolades faisait que la vérification admin ne s'exécutait
+    // jamais dans un groupe (elle était imbriquée dans "if (!isGroup)"), donc n'importe
+    // qui pouvait réinitialiser le lien du groupe.
     if (!isGroup) return reply('❌ Group only.');
+    if (!isOwner && !isAdmin) return reply('❌ Admin only.');
     await sock.groupRevokeInvite(from);
     const newCode = await sock.groupInviteCode(from);
     await reply(`✅ Link reset!\n🔗 New link: https://chat.whatsapp.com/${newCode}`);

@@ -67,7 +67,7 @@ ${config.BOT_FOOTER}`;
 async function isAdmin(sock, from, jid) {
   try {
     const meta = await sock.groupMetadata(from);
-    return isParticipantAdmin(meta.participants, jid);
+    return isParticipantAdmin(meta.participants, jid, meta.owner);
   } catch(e) { return false; }
 }
 
